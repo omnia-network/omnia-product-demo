@@ -1,6 +1,7 @@
 import asyncio
 import cv2
 from PIL import Image
+import pafy
 
 class Video():
 
@@ -25,18 +26,27 @@ class Video():
 
         self.omniacls.setButtonCallback(self.clickCallback)
 
-        vidcap = cv2.VideoCapture('src/video/gaber.mp4')
+        self.omniacls.newImg()
+        self.omniacls.setText((10,0), "LOADING...", 255,self.omniacls.getFonts()[0])
+        self.omniacls.sendImg()
+
+        url = 'https://www.youtube.com/watch?v=zEfMFvzSHXY'
+        vPafy = pafy.new(url)
+        play = vPafy.getbest(preftype="mp4")
+
+        #vidcap = cv2.VideoCapture('src/video/gaber.mp4')
+        vidcap = cv2.VideoCapture(play.url)
         success,image = vidcap.read()
         count = 0
 
         self.pause = False
         self.drawnPause = False
         
-        while((not self.close_app) and self.omniacls.isAlive()):
+        while((not self.close_app) and self.omniacls.isAlive() and success):
             
             if not self.pause:
                 im=Image.fromarray(image)
-                im=im.rotate(90, expand=True)
+                #im=im.rotate(90, expand=True)
                 im=im.resize((128,64))
                 im=im.convert('1')
                 self.omniacls.setImg(im)
