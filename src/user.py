@@ -42,7 +42,7 @@ class User(threading.Thread):
         ### Omnia Protocol and Class ###
         self.loop = asyncio.new_event_loop()
 
-        self.omniacls = OmniaClass(self.log, userData, self.protocol)
+        self.omniacls = OmniaClass(self.log, userData)
         self.reader = None
         self.writer = None
         ### --- ###
