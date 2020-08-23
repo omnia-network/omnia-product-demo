@@ -8,7 +8,6 @@ from eulero.src.profile     import ProfilePic'''
 
 from src.notifyService          import NotifyService
 from src.omniaClass             import OmniaClass
-from src.omniaProtocol          import OmniaProtocol
 
 from PIL   			            import Image
 import time
