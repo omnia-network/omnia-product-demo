@@ -83,7 +83,7 @@ class User(threading.Thread):
     
     def send(self, message):
         self.writer.write(message)
-        self.loop.create_task(self.__drain())
+        #await self.writer.drain() # should be called
 
     ''' --- '''
 
