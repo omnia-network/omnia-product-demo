@@ -1,16 +1,59 @@
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 import json
+import asyncio
+import os
+import logging
+import importlib
 
-class Router:
+from src.omniaMediaSharing      import OmniaMediaSharing
+
+class OmniaController:
     def __init__(self):
         self.devices = []
         self.nearDevices = {}
         self.streamingDevices = []
         self.users = {}
-        self.text = ''
+
+        ### Sharing ###
+        self.omnia_media_sharing = OmniaMediaSharing()
+        ### --- ###
+
+        ### Logging ###
+        logging.getLogger("PIL").setLevel(logging.WARNING)
+        self.log = logging.getLogger('controller')
+        ### --- ###
 
         with open("src/userDevices.json", "r") as rf:
             self.userDevices = json.load(rf)
+        
+        self.iot_imports = {}
+
+        self.importIOTFunctions()
+
+    def importIOTFunctions(self):
+        iot_funct_path ="src/iot_funct"
+
+        iot_functions = []
+        if os.path.exists(iot_funct_path):
+            for (_, _, filenames) in os.walk(iot_funct_path):
+                iot_functions.extend(filenames)
+                break
+    
+        iot_functions.sort()
+
+        for iot in iot_functions:
+            appName = iot[:-3]      # remove .py extension
+            if appName[0] != "_":   # do not import apps that start with "_"
+                self.log.debug("loading IOT function: {!r}".format(appName.upper()))
+                appObj = getattr(importlib.import_module("src.iot_funct."+appName), appName.capitalize())
+                self.iot_imports[appName] = appObj
+            else:
+                self.log.debug("ignoring IOT function: {!r}".format(appName[1:].upper()))
+    
+    def getIOTFunction(self, username, deviceType):
+        iot_fn = self.users[username]["iot"][deviceType]
+
+        return iot_fn
 
     def addDevice(self, device):
         self.devices.append(device)
@@ -20,7 +63,14 @@ class Router:
             self.devices.remove(device)
     
     def addUser(self, user):
-        self.users.__setitem__(user["name"], user["uid"])
+        iot_functions = {}
+        for iot in self.iot_imports:
+            iot_functions[iot] = self.iot_imports[iot](user["name"], self)
+        
+        self.users[user["name"]] =  {
+            "uid": user["uid"],
+            "iot": iot_functions
+        }
     
     def removeUser(self, username):
         if username in self.users:
@@ -42,13 +92,14 @@ class Router:
     def __updateNearDevices(self, user):
         for device in self.devices:
             if device.isNear:
-                if device.getNFC() == self.users[user]:
+                if device.getNFC() == self.users[user]["uid"]:
                     if device.name in self.userDevices[user]:
+                        #device.omniacls.stopRecvNFC()
                         self.__addNearDevice(device, user)
             else:
                 self.__removeNearDevice(device, user)
 
-    def listNearDevices(self, user):
+    async def listNearDevices(self, user):
         self.__updateNearDevices(user)
         
         availableDevices = []
@@ -79,15 +130,3 @@ class Router:
                         device.streamingUser = ""
             
             return dev
-    
-    def getText(self):
-        return self.text
-    
-    def setText(self, text):
-        self.text = text
-    
-    def addToText(self, text):
-        self.text += text
-    
-    def removeFromText(self,nChar):
-        self.text = self.text[:-nChar]

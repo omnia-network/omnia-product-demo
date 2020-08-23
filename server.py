@@ -2,9 +2,20 @@ import socket
 import importlib
 import json
 import binascii
-from src.app 		import Application
-from src.device 	import Device
-from src.router 	import Router
+import logging
+import sys
+
+from src.device 			import Device
+from src.omniaController 	import OmniaController
+from src.user				import User
+
+logging.basicConfig(
+            level=logging.DEBUG,
+            format='%(name)s: %(message)s',
+            stream=sys.stderr,
+        )
+
+log = logging.getLogger('main')
 
 threadAssign = {}
 
@@ -27,18 +38,20 @@ sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 sock.bind((adress, serv_port))
 sock.listen()
 
-router = Router()
+omnia_controller = OmniaController()
 
-print("SERVER STARTED")
+log.info("SERVER STARTED")
+
 while(1):
 
 	so, adr=sock.accept()
 	#so.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,1)	# send data separately
-	print("-----\nNEW CONNECTION")
-	print(adr)
+	log.debug("-----")
+	log.debug("NEW CONNECTION")
+	log.debug(adr)
 	mac=so.recv(6)
 	mac=binascii.hexlify(mac).decode()
-	print(mac)
+	log.debug(mac)
 	
 	username = ''
 	device = ''
@@ -49,20 +62,19 @@ while(1):
 
 
 		if username in threadAssign and threadAssign[username]["thread"].isAlive():
-			print("resuming USER:", username)
+			log.debug("resuming USER: {!r}".format(username))
 			threadAssign[username]["thread"].resumeConnection(so)
 			
 		else:
 			if username in threadAssign:
-				print("dead USER", username)
+				log.debug("dead USER {!r}".format(username))
 				threadAssign.pop(username)
-				router.removeUser(username)
+				omnia_controller.removeUser(username)
 
-			print("connecting USER:", username)
-			UserMain = getattr(importlib.import_module(username+".main"), "Main")
-			app = Application(so, adr, userData, router)
-			user=UserMain(app)
-			router.addUser(userData)
+			log.debug("connecting USER: {!r}".format(username))
+			
+			user=User(so, adr, userData, omnia_controller)
+			omnia_controller.addUser(userData)
 
 			threadAssign.__setitem__(username, {"thread": user})
 			user.start()
@@ -73,21 +85,21 @@ while(1):
 		
 
 		if deviceName in threadAssign and threadAssign[deviceName]["thread"].isAlive():
-			print("resuming DEVICE:", deviceName)
+			log.debug("resuming DEVICE: {!r}".format(deviceName))
 			threadAssign[deviceName]["thread"].resumeConnection(so)
 			
 		else:
 			if deviceName in threadAssign:
-				print("dead DEVICE", deviceName)
+				log.debug("dead DEVICE {!r}".format(deviceName))
 				threadAssign.pop(deviceName)
-				router.removeDevice(deviceName)
+				omnia_controller.removeDevice(deviceName)
 		
-			print("connecting DEVICE:", deviceName)
-			deviceApp = Application(so, adr, deviceData, router)
-			dev = Device(deviceApp, deviceData)
+			log.debug("connecting DEVICE: {!r}".format(deviceName))
+
+			dev = Device(so, adr, deviceData, omnia_controller)
 			dev.start()
 			threadAssign.__setitem__(deviceName, {"thread": dev})
-			router.addDevice(dev)
+			omnia_controller.addDevice(dev)
 
-	print("Clients connected:", len(threadAssign))
-	print("-----")
+	log.debug("Clients connected: {!r}".format(len(threadAssign)))
+	log.debug("-----")

@@ -1,214 +1,136 @@
-import threading
+from src.omniaClass             import OmniaClass
+
+from PIL   			            import Image
 import time
+import threading
+import os
+import importlib
+import asyncio
+import logging
 
 class Device(threading.Thread):
-    def __init__(self, app, deviceData):
-        self.__app=app
+
+    def __init__(self, socket, address, deviceData, omnia_controller=None):
+
+        ### Socket ###
+        self.sc=socket
+        self.sc.setblocking(False)
+        self.address=address
+        ### --- ###
+
+        ### Thread ###
         threading.Thread.__init__(self)
         self.name=deviceData["name"]
         self.type=deviceData["class"]
-        self.isNear=False
+        ### --- ###
+
+        ### Logging ###
+        logging.getLogger("PIL").setLevel(logging.WARNING)
+        self.log = logging.getLogger(
+            self.name+'_{}_{}'.format(*self.address)
+        )
+        ### --- ###
+
+        ### Omnia Protocol and Class ###
+        self.loop = asyncio.new_event_loop()
+
+        self.omniacls = OmniaClass(self.log, deviceData)
+        self.reader = None
+        self.writer = None
+        ### --- ###
+
+        ### Device Data ###
+        self.deviceData = deviceData
+        ### --- ###
+
+        ### Application ###
+        self.app = None
+        ### --- ###
+
+        ### Streaming ###
+        self.isNear = False
         self.stream = False
         self.streamingUser = ""
-        self.sendType=''
-        self.arguments=[]
-        self.data={}
-        self.adcvalue=0
-        self.i2cvalue=None
-        self.nfc=''
-        self.customParams = {}
-        self.text = ''
+        ### --- ###
 
+        ### IOT functions ###
+        self.iot_function = None
+        ### --- ###        
 
-    def run(self):
-        self.__app.getPinConfig("src/iot/"+self.name+"/pinout.json")
-        self.__app.getConfig("src/iot/"+self.name+"/config.json")
-        self.customParams = self.__app.config["custom"]
+        ### I/O data ###
+        self.data = 0
+        self.buttons = {}
+        ### --- ###
 
-        #datap_old=0
-        disc=False
-        self.newImg()
+        ### Flags ###
+        self.alive = True
+        self.canSend = True
+        ### --- ###
 
-        while(self.__app.isAlive()):
+        ### NFC ###
+        self.nfc = None
+        ### --- ###
 
-            if (self.stream and self.isNear):
-                if(self.sendType=="image"):
-                    self.data=self.__app.sendImg_and_recvData()
-                    self.sendType=""
-                    disc=True
-                elif(self.sendType=="neopixel"):
-                    self.__app.setNeopixel(self.arguments[0],self.arguments[1])
-                    self.arguments=[]
-                    self.sendType=""
-                elif(self.sendType=="outpin"):
-                    #self.data=self.__app.recvData()
-                    self.__app.setOutPin(self.arguments[0],self.arguments[1])
-                    self.arguments=[]
-                    self.sendType=""
-                    #self.data = self.__app.recvData()
-                elif(self.sendType=="inpin"):
-                    self.__app.setInPin(self.arguments[0])
-                    self.arguments=[]
-                    self.sendType=""
-                elif(self.sendType=="pwm"):
-                    self.__app.setPwm(self.arguments[0],self.arguments[1], self.arguments[2])
-                    self.arguments=[]
-                    self.sendType=""
-                elif(self.sendType=="adc"):
-                    self.adcvalue=self.__app.readAdc(self.arguments[0],self.arguments[1])
-                    self.sendType=""
-                elif(self.sendType=="i2c"):
-                    self.i2cvalue = self.__app.readI2C(self.arguments[0],self.arguments[1])
-                    self.sendType=""
-                elif(self.sendType=="setdisplay"):
-                    self.__app.setDisplay(self.arguments[0],self.arguments[1], self.arguments[2], self.arguments[3], self.arguments[4])
-                    self.arguments=[]
-                    self.sendType=""
-                else:
-                    self.data=self.__app.recvData()
-                
-                #self.nfc=self.__app.readNFC()
-                
+        ### Handle send ###
+        self.sendType = None
+        ### --- ###
+    
+    ''' Send and Receive '''
+
+    async def recv(self):
+        while True:
+            self.log.debug("receiving data")
+            data = await self.reader.readline()
+            self.omniacls.receivedData(data)
+    
+    async def __drain(self):
+        await self.writer.drain()
+    
+    def send(self, message):
+        self.writer.write(message)
+        self.loop.create_task(self.__drain())
+
+    ''' --- '''
+
+    def init_config(self):
+        self.omniacls.getPinConfig("src/iot/"+self.name+"/pinout.json")
+        self.omniacls.getConfig("src/iot/"+self.name+"/config.json")
+
+    def runIOTFunction(self, iot_function):
+        self.log.debug("running iot function {!r}".format(iot_function))
+        self.omniacls.stopRecvNFC()
+        iot_function.start()
+        self.iot_function = iot_function
+    
+    async def __run_iot(self):
+        while True:
+            if self.iot_function:
+                self.iot_function.run()
+
+            await asyncio.sleep(0.1)
+
+    def NFCCallback(self, nfc):
+
+        nfc=nfc.split(":")
+        if(len(nfc)>=2):
+            nfc=nfc[1]
+            if(not len(nfc)==8):
+                nfc='0'
             else:
-                if(disc):
-                    disc=False
-                    self.sendType=""
-                    self.__app.newImg()
-                    self.__app.sendImg()
-
-                self.nfc=self.__app.readNFC()
-
-            #TODO: check nfc tag  
-            if self.nfc != '0':
+                self.nfc = nfc
                 self.isNear = True
-
-            #print(self.data)	
-            """if (self.data['PROXIMITY']!=datap_old):
-                datap_old=self.data['PROXIMITY']
-                if(datap_old):
-                    self.isNear=not self.isNear"""
-
-        self.stream=False
+                self.log.debug("proximity {!r}".format(nfc))
     
-    def resumeConnection(self, so):
-        self.__app.changeSocket(so)
-        self.__app.getPinConfig("src/iot/"+self.name+"/pinout.json")
-        print("resumed")
-
-    def sendImg(self):
-        self.sendType="image"
-        while( self.sendType=="image" and (self.stream and self.isNear) ):
-            pass
-
-    def recvData(self):
-        return self.data
-    
-    def sendImg_and_recvData(self):
-        self.sendType="image"
-        while( self.sendType=="image" and (self.stream and self.isNear) ):
-            pass
-
-        return self.data
-
-    def setNeopixel(self, status, pin=-1):
-        self.sendType="neopixel"
-        self.arguments.append(status)
-        self.arguments.append(pin)
-        while( self.sendType=="neopixel" and (self.stream and self.isNear)):
-            pass
-
-    def setOutPin(self, pin, value):
-        self.sendType="outpin"
-        self.arguments.append(pin)
-        self.arguments.append(value)
-        while( self.sendType=="outpin" and (self.stream and self.isNear)):
-            pass
-    
-    def getOutPins(self):
-        return self.__app.outPins
-
-    def getInPins(self):
-        return self.__app.inPins
-    
-    def setInPin(self, pin):
-        self.sendType="inpin"
-        self.arguments.append(pin)
-        while( self.sendType=="inpin" and (self.stream and self.isNear)):
-            pass
-
-    def setPwm(self, pin, freq, duty):
-        self.sendType="pwm"
-        self.arguments.append(pin)
-        self.arguments.append(freq)
-        self.arguments.append(duty)
-        while( self.sendType=="pwm" and (self.stream and self.isNear)):
-            pass
-
-    def readAdc(self, pin, resolution=1024):
-        self.sendType="adc"
-        self.arguments.append(pin)
-        self.arguments.append(resolution)
-        while( self.sendType=="adc" and (self.stream and self.isNear)):
-            pass
-
-        return self.adcvalue
-
-    def readI2C(self, addr, nbytes):
-        self.sendType="i2c"
-        self.arguments.append(addr)
-        self.arguments.append(nbytes)
-        while( self.sendType=="i2c" and (self.stream and self.isNear)):
-            pass
-
-        return self.i2cvalue
-
-    def setDisplay(self, sda, scl, heigth, width, dispType):
-        self.sendType="setdisplay"
-        self.arguments.append(sda)
-        self.arguments.append(scl)
-        self.arguments.append(heigth)
-        self.arguments.append(width)
-        self.arguments.append(dispType)
-        while( self.sendType=="setdisplay" and (self.stream and self.isNear)):
-            pass
-
-    def newImg(self):
-        self.__app.newImg()
-    
-    def setImg(self, img):
-        self.__app.setImg(img)
-
-    def fillImg(self, img_color):
-        self.__app.fillImg(img_color)
-
-    def addFont(self, font, font_size):
-        self.__app.addFont(font, font_size)
-
-    def getFonts(self):
-        return self.__app.getFonts()
-
-    def setRotation(self, rotation):
-        self.__app.setRotation(rotation)
-
-    def setContrast(self, contrast):
-        self.__app.setContrast(contrast)
-
-    def setCustomParams(self, customParams):
-        self.__app.setCustomParams(customParams)
-    
-    def getCustomParams(self):
-        return self.__app.getCustomParams()
-
-    def setText(self,pos,txt, txt_color, txt_font):
-        self.__app.setText(pos, txt, txt_color, txt_font)
-
-    def setNeoPin(self, pin):
-        self.__app.setNeoPin(pin)
+    def getNFC(self):
+        return self.nfc
     
     def resetStreamingUser(self):
+        self.log.debug("resetting streaming user")
         self.streamingUser=""
         self.stream = False
-        self.isNear=False
+        self.isNear = False
+        self.omniacls.startRecvNFC(self.NFCCallback)
+        self.iot_function = None
     
     def setStreamingUser(self, user):
         self.streamingUser=user
@@ -222,6 +144,32 @@ class Device(threading.Thread):
 
     def getDeviceType(self):
         return self.type
-    
-    def getNFC(self):
-        return self.nfc
+
+    def run(self):
+
+        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=self.sc))
+
+        self.omniacls.setSendFunction(self.send)
+        
+        self.init_config()
+
+        recv_task = self.loop.create_task(self.recv())
+
+        iot_task = self.loop.create_task(self.__run_iot())
+
+        self.omniacls.startRecvNFC(self.NFCCallback)
+
+        try:
+            # Run the event loop
+            self.loop.run_forever()
+        except KeyboardInterrupt:
+            self.log.debug("closing {!r} socket".format(self.name))
+            pass
+
+        self.loop.close()
+
+    def resumeConnection(self, so):
+        self.sc = so
+        self.omniacls.getPinConfig("src/iot/"+self.name+"/pinout.json")
+        #self.omniacls.resumeImg()
+        self.log.debug("resumed")

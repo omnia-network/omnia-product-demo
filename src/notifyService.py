@@ -1,108 +1,113 @@
-from PIL   				import Image
 import time
-import threading
+import asyncio
 from numpy.random 			import randint
 
-from src.iot_funct.door 		import Door
-from src.iot_funct.screen 		import Screen
-from src.iot_funct.led			import Led
-from src.iot_funct.keyboard 	import Keyboard
-from src.iot_funct.console		import Console
-#from application import Application
+class NotifyService():
+    def __init__(self, omniacls, omnia_controller, log):
 
-class NotifyService(threading.Thread):
-	def __init__(self, app, router):
-		threading.Thread.__init__(self)
-		self.app=app
-		self.router=router
-		self.username=self.app.getUsername()
-		self.recentDevices=[]
-		#self.nearDeavices=[]
-		self.device=0
-		self.name = self.username+"_notifyService"
-		self.appList={
-			"door": Door(),
-			"screen": Screen(self.username, self.device, self.router),
-			"console": Console(self.username, self.device, self.router),
-			"keyboard": Keyboard(self.username, self.device, self.router),
-			"led": Led()
-			} #{"dev.type": IOT_Functions()}
-		
-		self.notToResetType = ["screen", "keyboard", "console"]
-		self.threadType = ["screen", "keyboard", "console"]
+        ### Omnia Class and Controller ###
+        self.omniacls = omniacls
+        self.omnia_controller = omnia_controller
+        ### --- ###
+        
+        ### Logging ###
+        self.log = log
+        ### --- ###
 
-	def run(self):
-		print(self.app.getUsername()+": notify started")
-		while (self.app.isAlive()):
-			devs=self.router.listNearDevices(self.username)
-			for dev in devs: 
-				if((not (dev in self.recentDevices)) and (dev.getStreamingUser()=="")):
-					dev.setStreamingUser(self.username)
-					self.device=dev
+        ### User Data ###
+        self.username = self.omniacls.getUsername()
+        ### --- ###
 
-			for dev in self.recentDevices:
-				if(not (dev in devs)):
-					self.recentDevices.remove(dev)
+        ### Devices ###
+        self.recentDevices = []
+        #self.nearDeavices=[]
+        self.device = 0
+        ### --- ###
 
-			if(self.device):
-				self.app.startNotify()
-				color = list(randint(0,32,3))
-				self.app.setNeopixel(color, -1, True)
-				self.app.setText((40,0), "NOTIFY", 255,self.app.getFonts()[0], True)
-				self.app.setText((10,20), "FOUND", 255,self.app.getFonts()[0], True)
+        ### Flags ###
+        self.stop = False
+        self.accepted = False
+        ### --- ###
+        
+        self.notToResetType = ["screen", "keyboard", "console"]
+        self.threadType = ["screen", "keyboard", "console"]
 
-				devType = self.device.getDeviceType()
-				
-				notifMsg = self.appList[devType].getNotificationMessage(self.device)
-				for line in notifMsg:
-					self.app.setText(line[0], line[1], 255,self.app.getFonts()[0], True)
+    def clickButtonCallback(self, clickedBtn):
+        self.log.debug("notification clicked "+clickedBtn)
+        if(clickedBtn == "SELECT"):
+            self.stop = True
+            self.accepted = True
+        
+        elif(clickedBtn == "DOWN"):
+            self.stop = True
+                
+        elif(clickedBtn == "UP"):
+            self.stop = True
 
-				self.app.sendImg(True)
-				data=self.app.recvData(True)
-				datad_old=data['DOWN']
-				datau_old=data['UP']
-				datas_old=data['SELECT']
-				stop=False
-				accepted=False
-				startTime = time.time()
-				while(not stop):
-					data=self.app.recvData(True)
-					if (data['DOWN']!=datad_old):
-						datad_old=data['DOWN']
-						if(datad_old):
-							stop=True
-							#self.recentDevices.append(dev)
-							
-					elif (data['UP']!=datau_old):
-						datau_old=data['UP']
-						if(datau_old):
-							stop=True	
-							#self.recentDevices.append(dev)
-					
-					elif(data['SELECT']!=datas_old):
-						datas_old=data['SELECT']
-						if(datas_old):
-							stop=True
-							accepted=True
+    async def run(self):
 
-					elif(time.time() - startTime > 30):
-						stop = True
+        self.log.debug("Notify Service started")
 
-				if(accepted):
-					if devType in self.threadType:
-						self.appList[devType].handleStreaming(self.device)
-					else:
-						self.appList[devType].run(self.device)
+        while (self.omniacls.isAlive()):
+            devs = await self.omnia_controller.listNearDevices(self.username)
+            
+            for dev in devs: 
+                if((not (dev in self.recentDevices)) and (dev.getStreamingUser()=="")):
+                    dev.setStreamingUser(self.username)
+                    self.device=dev
 
-				else:
-					self.device.resetStreamingUser()
+            for dev in self.recentDevices:
+                if(not (dev in devs)):
+                    self.recentDevices.remove(dev)
 
-				self.app.setNeopixel([0, 0, 0], -1, True)
-				self.app.stopNotify()
-				if not (devType in self.notToResetType):
-					self.device.resetStreamingUser()
-				self.device=0
-			
-	def getUsedDevices(self):
-		return self.recentDevices
+            if(self.device):
+                self.omniacls.startNotify(self.clickButtonCallback)
+
+                self.log.debug("new notification for "+self.username)
+
+                color = list(randint(0,32,3))
+                self.omniacls.setNeopixel(color, -1, True)
+                self.omniacls.setText((40,0), "NOTIFY", 255,self.omniacls.getFonts()[0], True)
+                self.omniacls.setText((10,20), "FOUND", 255,self.omniacls.getFonts()[0], True)
+
+                devType = self.device.getDeviceType()
+
+                iot_function = self.omnia_controller.getIOTFunction(self.username, devType)
+                
+                notifMsg = iot_function.getNotificationMessage(self.device.getName())
+                #self.log.debug(notifMsg)
+                for line in notifMsg:
+                    self.omniacls.setText(line[0], line[1], 255,self.omniacls.getFonts()[0], True)
+
+                self.omniacls.sendImg(True)
+
+                self.stop = False
+                self.accepted = False
+                startTime = time.time()
+
+                while(not self.stop):
+                    if time.time() - startTime > 30:
+                        self.stop = True
+                    
+                    await asyncio.sleep(0.1)
+
+                if(self.accepted):
+                    if devType in self.threadType:
+                        iot_function.handleStreaming(self.device)
+                        self.device.runIOTFunction(iot_function)
+                    '''else:
+                        self.appList[devType].run(self.device)'''
+                else:
+                    self.device.resetStreamingUser()
+
+                self.omniacls.setNeopixel([0, 0, 0], -1, True)
+                self.omniacls.stopNotify()
+                '''if not (devType in self.notToResetType):
+                    self.device.resetStreamingUser()'''
+                self.device = 0
+            
+            await asyncio.sleep(0.1)
+            
+    def getUsedDevices(self):
+        return self.recentDevices
 

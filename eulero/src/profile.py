@@ -1,55 +1,51 @@
 import time
 from PIL import Image
 import time
+import asyncio
 
-class ProfilePic:
-	def __init__(self, app):
-		self.app=app
-		self.i=0
+class Profile:
+    def __init__(self, omniacls):
+        self.omniacls=omniacls
 
-	def run(self):
-		datau_old=0
-		datad_old=0
-		datas_old=0
-		next_app=False
-		close_app=False
-		pics = []
-		pics.append(Image.open('mez/src/images/pic.png'))
-		pics.append(Image.open('eulero/src/images/pic.png'))
-		pics.append(Image.open('gaber/src/images/pic.png'))
-		img_time = time.time()
-		self.app.setImg(pics[0])
-		self.app.sendImg()
-		i = 1
-		pause = False
-		while((not close_app) and self.app.isAlive()):
-			if time.time() - img_time > 3 and not pause:
-				self.app.setImg(pics[i])
-				self.app.sendImg()
-				if i < len(pics)-1:
-					i += 1
-				else:
-					i = 0
-			data = self.app.recvData()
-			if (data['UP']!=datau_old):
-				datau_old=data['UP']
-				if(datau_old):
-					pause = not pause
-					
+        self.close_app = False
+        self.pause = False
+    
+    def clickCallback(self, clickedBtn):
+        if(clickedBtn == "SELECT"):
+            self.close_app = True
+        
+        elif(clickedBtn == "DOWN"):
+            self.pause = not self.pause
+                
+        elif(clickedBtn == "UP"):
+            self.pause = not self.pause
 
-			elif (data['DOWN']!=datad_old):
-				datad_old=data['DOWN']
-				if(datad_old):
-					pause = not pause
+    async def run(self):
 
-			elif(data['SELECT']!=datas_old):
-				datas_old=data['SELECT']
-				if(datas_old):
-					next_app=True
-			
-			if (next_app and data['SELECT']==0):
-				next_app=False
-				#print("menu")
-				close_app=True
+        self.omniacls.setButtonCallback(self.clickCallback)
 
-		return -1
+        pics = []
+        pics.append(Image.open('mez/src/images/pic.png'))
+        pics.append(Image.open('eulero/src/images/pic.png'))
+        pics.append(Image.open('gaber/src/images/pic.png'))
+        img_time = time.time()
+        
+        self.omniacls.setImg(pics[0])
+        self.omniacls.sendImg()
+
+        i = 1
+
+        while((not self.close_app) and self.omniacls.isAlive()):
+            if time.time() - img_time > 3 and not self.pause:
+                self.omniacls.setImg(pics[i])
+                self.omniacls.sendImg()
+                if i < len(pics)-1:
+                    i += 1
+                else:
+                    i = 0
+            
+            await asyncio.sleep(0.1)
+
+        self.close_app = False
+
+        return -1

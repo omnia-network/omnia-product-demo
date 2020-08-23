@@ -1,28 +1,20 @@
-import threading
-import time
+import asyncio
 
-class Keyboard(threading.Thread):
-    def __init__(self, username, device, router):
-        self.device = device
+class Keyboard():
+    def __init__(self, username, omnia_controller):
+        self.device = 0
         self.username = username
-        self.router = router
-        self.counter = 0
-        self.started = False
-        self.deviceChanged = False
+        self.omnia_controller = omnia_controller
+        self.sharing = self.omnia_controller.omnia_media_sharing
+
+        self.c = b''
         self.text = ''
-        self.ris = ''
 
-    def __startThread(self):
-        threading.Thread.__init__(self)
-        self.name = self.username+"_keyboard"
-        self.start()
-        self.started=True
-
-    def getNotificationMessage(self, device, username=None):
+    def getNotificationMessage(self, deviceName, username=None):
 
         msg = []
 
-        msg.append([(10, 35), device.getName().replace("_", " ").upper()])
+        msg.append([(10, 35), deviceName.replace("_", " ").upper()])
         msg_status = "ENABLE KEYBOARD?"
         
         msg.append([(10,50), msg_status])
@@ -36,22 +28,24 @@ class Keyboard(threading.Thread):
             self.deviceChanged = True
             if old_device != 0:
                 old_device.resetStreamingUser()
-            if not self.started:
-                self.__startThread()
     
     def __setDevice(self, device):
         self.device = device
+    
+    def I2CCallback(self, character):
+        if character != self.c:
+            self.c = character
+
+            if self.c != b'\x00':
+                if self.c != b'\x7f': #backspace
+                    self.sharing.addToText(self.c.decode(), self.username)
+                else:
+                    self.sharing.removeFromText(1, self.username)
+
+    def start(self):
+        self.device.omniacls.setI2C()
+        self.device.omniacls.startRecvI2C(self.I2CCallback, 8, 1)
 
     def run(self):
-        old_c=''
-        while True:
-            c=self.device.readI2C(8,1)
-
-            if c != old_c:
-                #print(c)
-                old_c = c
-                if c != b'\x00':
-                    if c != b'\x7f': #backspace
-                        self.router.addToText(c.decode())
-                    else:
-                        self.router.removeFromText(1)
+        #print(self.c, self.old_c)
+        pass

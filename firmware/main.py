@@ -15,14 +15,15 @@ while not wlan.isconnected():
 connport=50500
 
 # server address
-adress="192.168.0.8"
-#adress = socket.getaddrinfo("server.domain.com",connport)[0][-1][0]
+host="192.168.1.10"
+#host="lucab.ddns.net"
+adress = socket.getaddrinfo(host,connport)[0][-1][0]
 
 so=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 so.connect((adress, connport))
 so.send(mac)
 
-time.sleep(1)
+#time.sleep(1)
 
 # run client firmware with communication port
 gbros_fw.run(so)
