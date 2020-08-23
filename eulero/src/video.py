@@ -18,7 +18,7 @@ class Video():
                 
         elif(clickedBtn == "UP"):'''
 
-    async def run(self, firstApp=-1):
+    async def run(self):
 
         self.omniacls.setButtonCallback(self.clickCallback)
 
