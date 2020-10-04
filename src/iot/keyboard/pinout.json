@@ -3,15 +3,13 @@
     },
     "out": {
     },
-    "nfc": {
-        "sclk":18,
-        "mosi":23,
-        "miso":19,
-        "rst":4,
-        "sda":2
+    "audio": {
+        "bck": 33,
+        "ws": 25,
+        "sdout": 32,
+        "samplerate": 8000
     },
-    "i2c": {
-        "sda": 21,
-        "scl": 22
+    "config": {
+        "needed": false
     }
 }

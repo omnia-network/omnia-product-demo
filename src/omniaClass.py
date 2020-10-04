@@ -5,13 +5,14 @@ import sys
 import struct
 import asyncio
 import logging
+import io
 
 #from src.omniaProtocol		import OmniaProtocol
 
 class OmniaClass:
 
     #*****VERSION*****#
-    __version__ = "0.4.1"
+    __version__ = "0.5.1"
 
     ### Display types ###
     displayTypeList= {"sh1106":0, "ssd1306":1}
@@ -69,8 +70,16 @@ class OmniaClass:
         self.__nfc_cb = None
         ### --- ###
 
+        ### BLE Callback ###
+        self.__ble_cb = None
+        ### --- ###
+
         ### ADC Callback ###
         self.__adc_cb = None
+        ### --- ###
+
+        ### Touch Callback ###
+        self.__touch_cb = None
         ### --- ###
 
         ### Protocol ###
@@ -97,11 +106,23 @@ class OmniaClass:
     def setSendFunction(self, send_fn):
         self.send_fn = send_fn
     
-    def __packImg(self, pic):
+    def __packImg(self, pic, msg_type):
 
         b_msg = pic
         
-        b_msg_type = "S".encode()
+        b_msg_type = msg_type.encode()
+        
+        to_send = b_msg_type + b_msg #+ b'\n'
+
+        #return to_send
+
+        return self.__setMsg(to_send)
+    
+    def __packAudio(self, samples):
+
+        b_msg = samples
+        
+        b_msg_type = "a".encode()
         
         to_send = b_msg_type + b_msg #+ b'\n'
 
@@ -158,10 +179,15 @@ class OmniaClass:
             self.receivedButtons(int(data))
         elif self.__recvType == 'nfc':
             self.receivedNFC(data.decode())
+        elif self.__recvType == 'ble':
+            self.receivedBLE(data.decode().replace('\n',''))
         elif self.__recvType == 'adc':
             self.receivedADC(int(data))
         elif self.__recvType == 'i2c':
+            #self.log.debug("I2C received: {!r}".format(data.decode().replace('\n','')))
             self.receivedI2C(bytearray(data).replace(b'\n',b''))    # avoid reading '\n' at the end
+        elif self.__recvType == 'touch':
+            self.receivedTouch(data.decode().replace('\n',''))
     '''
     ### --- ###
     '''
@@ -269,6 +295,23 @@ class OmniaClass:
     ### --- ###
     '''
 
+    '''
+    ### Touchscreen ###
+    '''
+    def startRecvTouch(self, callback):
+        self.__recvType = 'touch'
+        self.__touch_cb = callback
+    
+    def stopRecvTouch(self, callback):
+        self.__recvType = 'button'
+        self.__touch_cb = None
+    
+    def receivedTouch(self, data):
+        self.__touch_cb(data)
+    '''
+    ### --- ###
+    '''
+
     ''' 
     ### NFC functions and callback ###
     '''
@@ -282,39 +325,6 @@ class OmniaClass:
                 rst,
                 sda
                 ], 'n'))
-    
-    def __recvNFC(self):
-        data='0'
-        if(self.alive):
-            self.sc.settimeout(self.timeout)
-            try:
-                data=self.sc.recv(4).decode()
-                self.recvTime = time.time()
-            except:
-                if time.time() - self.recvTime > 120:
-                    #print(self.getUsername()+": dead")
-                    self.sc.close()
-                    self.alive=False
-
-        if(data!='0'):
-            data=data.split(":")
-            if(len(data)>=2):
-                data=data[1]
-                if(not len(data)==8):
-                    data='0'
-            
-        
-        return data
-    
-    def readNFC(self, notify=False):
-        data='0'
-        if((self.notifyStarted and notify) or (not self.notifyStarted)):
-            self.__send(b'1')
-            #time.sleep(0.01)
-            data=self.__recvNFC()
-
-        #time.sleep(0.01)
-        return data
 
     def startRecvNFC(self, nfc_cb):
         self.__send(self.__packMessage([
@@ -336,6 +346,77 @@ class OmniaClass:
     def receivedNFC(self, data):
         self.__nfc_cb(data)
     
+    '''
+    ### --- ###
+    '''
+
+    ''' 
+    ### BLE functions and callback ###
+    '''
+
+    def setBLE(self, notify=True):
+        if((self.notifyStarted and notify) or (not self.notifyStarted)):
+            self.__sendc(self.__packMessage([
+                1
+                ], 'B'))
+
+    def startRecvBLE(self, ble_cb):        
+        self.__send(self.__packMessage([
+            1
+        ], 'b'))            # start BLE scan
+        self.__ble_cb = ble_cb
+        self.__recvType = 'ble'
+        self.log.debug("starting BLE scan")
+    
+    def stopRecvBLE(self):
+        self.__send(self.__packMessage([
+            0
+        ], 'b'))
+        self.__ble_cb = None
+        self.__recvType = 'button'
+        self.log.debug("stopping BLE scan")
+
+    def setBLECallback(self, ble_cb):
+        self.__ble_cb = ble_cb
+    
+    def receivedBLE(self, data):
+        self.__ble_cb(data)
+    
+    '''
+    ### --- ###
+    '''
+
+    ''' 
+    ### AUDIO functions and callback ###
+    '''
+
+    def startAudio(self, framerate, channels, sampwidth, chunk_size, notify=True):
+        if((self.notifyStarted and notify) or (not self.notifyStarted)):
+            self.__sendc(self.__packMessage([
+                1, 
+                framerate, 
+                channels, 
+                sampwidth, 
+                chunk_size
+                ], 'A'))
+    
+    def stopAudio(self, framerate, channels, sampwidth, notify=True):
+        if((self.notifyStarted and notify) or (not self.notifyStarted)):
+            self.__sendc(self.__packMessage([
+                0
+                ], 'A'))
+
+    '''def setAudio(self, bck, ws, sdout, samplerate, notify=True):
+        if((self.notifyStarted and notify) or (not self.notifyStarted)):
+            self.__sendc(self.__packMessage([
+                bck, 
+                ws, 
+                sdout, 
+                samplerate
+                ], 'J'))'''
+    
+    def sendAudio(self, samples):
+        self.__send(self.__packAudio(samples))
     '''
     ### --- ###
     '''
@@ -440,23 +521,35 @@ class OmniaClass:
             self.outPins = tmp["out"]
             self.setInPins()
 
-            if("pwm" in tmp):
-                self.pwmPins= tmp["pwm"]
+            needed = True
 
-            if ("neopixel" in tmp):
-                for neo in tmp["neopixel"]:
-                    self.setNeoPin(tmp["neopixel"][neo]["number"])
+            if ("config" in tmp):
+                needed = tmp["config"]["needed"]
 
-            if ("display" in tmp):
-                self.heigth=tmp["display"]["heigth"]
-                self.width=tmp["display"]["width"]
-                self.setDisplay(tmp["display"]["sda"], tmp["display"]["scl"], self.heigth, self.width, tmp["display"]["type"])
+            if needed:
+                if("pwm" in tmp):
+                    self.pwmPins= tmp["pwm"]
 
-            if ("nfc" in tmp):
-                self.setNFC(tmp["nfc"]["sclk"],tmp["nfc"]["mosi"],tmp["nfc"]["miso"],tmp["nfc"]["rst"],tmp["nfc"]["sda"])
-            
-            if ("i2c" in tmp):
-                self.I2CPins = tmp["i2c"]
+                if ("neopixel" in tmp):
+                    for neo in tmp["neopixel"]:
+                        self.setNeoPin(tmp["neopixel"][neo]["number"])
+
+                if ("display" in tmp):
+                    self.heigth=tmp["display"]["heigth"]
+                    self.width=tmp["display"]["width"]
+                    self.setDisplay(tmp["display"]["sda"], tmp["display"]["scl"], self.heigth, self.width, tmp["display"]["type"])
+
+                if ("nfc" in tmp):
+                    self.setNFC(tmp["nfc"]["sclk"],tmp["nfc"]["mosi"],tmp["nfc"]["miso"],tmp["nfc"]["rst"],tmp["nfc"]["sda"])
+                
+                if ("ble" in tmp):
+                    self.setBLE()
+                
+                '''if ("audio" in tmp):
+                    self.setAudio(tmp["audio"]["bck"], tmp["audio"]["ws"], tmp["audio"]["sdout"], tmp["audio"]["samplerate"])'''
+                
+                if ("i2c" in tmp):
+                    self.I2CPins = tmp["i2c"]
         
         self.canSend = True
 
@@ -499,6 +592,38 @@ class OmniaClass:
     ### --- ###
     '''
 
+    '''
+    ### Video Stream functions
+    '''
+
+    def startStream(self):
+        self.__send(self.__packMessage([
+            1
+        ], 'V'))
+    
+    def stopStream(self):
+        self.__send(self.__packMessage([
+            0
+        ], 'V'))
+
+    def sendFrame(self, image, notify=False):
+        if((self.notifyStarted and notify) or (not self.notifyStarted)):
+            if image:
+                f = io.BytesIO()
+                image.save(f, "jpeg")
+                buf = f.getbuffer()
+
+                self.__send(self.__packImg(buf, 'v'))
+
+                del buf
+                f.close()
+            else:
+                self.__send(self.__packImg(b'0', 'v'))
+
+    '''
+    ### --- ###
+    '''
+
     def sendImg(self, notify=False):
         if((self.notifyStarted and notify) or (not self.notifyStarted)):
             if(self.heigth and self.width):
@@ -517,8 +642,22 @@ class OmniaClass:
                     self.imgIsNew=False
                     pic=pic.convert('1')
                     pic=pic.tobytes()
-                    self.__send(self.__packImg(pic))
+                    #pic=pic.tobitmap()
+                    #pic = bytearray(pic).hex()
+                    #print(pic, len(pic))
+                    self.__send(self.__packImg(pic, "S"))
+    
+    def sendDisplay(self, image, notify=False):
+        if((self.notifyStarted and notify) or (not self.notifyStarted)):
+            f = io.BytesIO()
+            image.save(f, "jpeg")
+            buf = f.getbuffer()
 
+            self.__send(self.__packImg(buf, 'd'))
+
+            del buf
+            f.close()
+    
     def resumeImg(self):
         self.imgIsNew=True
         self.sendImg()

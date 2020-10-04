@@ -1,12 +1,14 @@
 import network
 import socket
-import gbros_fw
+import firmware
 import time
+import ubinascii
 
 wlan=network.WLAN()
 
 # get esp mac address
 mac=wlan.config('mac')
+mac=ubinascii.hexlify(mac)
 
 while not wlan.isconnected():
     pass
@@ -21,9 +23,11 @@ adress = socket.getaddrinfo(host,connport)[0][-1][0]
 
 so=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 so.connect((adress, connport))
-so.send(mac)
+so.send(mac.encode())
 
 #time.sleep(1)
 
 # run client firmware with communication port
-gbros_fw.run(so)
+firmware.run(so)
+
+print("end")

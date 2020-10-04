@@ -8,6 +8,11 @@ import importlib
 import asyncio
 import logging
 
+# used for tests
+from src.iot_funct.sound import Sound
+from src.iot_funct.screen import Screen
+from src.iot_funct.display import Display
+
 class Device(threading.Thread):
 
     def __init__(self, socket, address, deviceData, omnia_controller=None):
@@ -98,7 +103,8 @@ class Device(threading.Thread):
 
     def runIOTFunction(self, iot_function):
         self.log.debug("running iot function {!r}".format(iot_function))
-        self.omniacls.stopRecvNFC()
+        #self.omniacls.stopRecvNFC()
+        self.omniacls.stopRecvBLE()
         iot_function.start()
         self.iot_function = iot_function
     
@@ -107,7 +113,7 @@ class Device(threading.Thread):
             if self.iot_function:
                 self.iot_function.run()
 
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
 
     def NFCCallback(self, nfc):
 
@@ -121,6 +127,33 @@ class Device(threading.Thread):
                 self.isNear = True
                 self.log.debug("proximity {!r}".format(nfc))
     
+    def BLECallback(self, ble):
+
+        ble = ble.split(',')
+
+        nearestRSSI = -200
+        nearestName = ""
+
+        if len(ble) >= 1:
+            for user in ble:
+                self.log.debug("user {!r}".format(user))
+                user = user.split("+")
+                if len(user)>=2:
+                    rssi = int(user[0])
+                    name = user[1]
+                    if rssi > -71:
+                        self.log.debug("user near {!r}".format(rssi))
+                        if rssi > nearestRSSI:
+                            nearestRSSI = rssi
+                            nearestName = name
+                            self.log.debug("user nearest {!r}".format(nearestName))
+            
+            if nearestName != "":
+                self.nfc = nearestName
+                self.isNear = True
+                self.log.debug("proximity {!r}".format(nearestName))
+                #self.omniacls.stopRecvBLE()
+    
     def getNFC(self):
         return self.nfc
     
@@ -129,7 +162,8 @@ class Device(threading.Thread):
         self.streamingUser=""
         self.stream = False
         self.isNear = False
-        self.omniacls.startRecvNFC(self.NFCCallback)
+        #self.omniacls.startRecvNFC(self.NFCCallback)
+        self.omniacls.startRecvBLE(self.BLECallback)
         self.iot_function = None
     
     def setStreamingUser(self, user):
@@ -155,9 +189,24 @@ class Device(threading.Thread):
 
         recv_task = self.loop.create_task(self.recv())
 
+        # used for tests
+
+        # s = Sound("eulero", None)
+        # s.handleStreaming(self)
+        # self.runIOTFunction(s)
+
+        # f = Screen("eulero", None)
+        # f.handleStreaming(self)
+        # self.runIOTFunction(f)
+
+        # f = Display("eulero", None)
+        # f.handleStreaming(self)
+        # self.runIOTFunction(f)
+
         iot_task = self.loop.create_task(self.__run_iot())
 
-        self.omniacls.startRecvNFC(self.NFCCallback)
+        #self.omniacls.startRecvNFC(self.NFCCallback)
+        self.omniacls.startRecvBLE(self.BLECallback)
 
         try:
             # Run the event loop

@@ -29,8 +29,8 @@ class NotifyService():
         self.accepted = False
         ### --- ###
         
-        self.notToResetType = ["screen", "keyboard", "console"]
-        self.threadType = ["screen", "keyboard", "console"]
+        self.notToResetType = ["screen", "keyboard", "console", "sound", "display"]
+        self.threadType = ["screen", "keyboard", "console", "sound", "display"]
 
     def clickButtonCallback(self, clickedBtn):
         self.log.debug("notification clicked "+clickedBtn)

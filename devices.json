@@ -4,9 +4,9 @@
                         "class" : "keyboard"
                     },
 
-    "98f4ab68fad8": {
+    "b827ebd3df4d": {
                         "name" : "screen_1",
-                        "class" : "console"
+                        "class" : "display"
                     },
 
     "2462abcab9ac": {
