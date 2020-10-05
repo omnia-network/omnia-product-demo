@@ -1,6 +1,9 @@
 from PIL import Image, ImageDraw, ImageFont
 import io
 import asyncio
+import time
+
+from src.omniaUI    import OmniaUI, OmniaUIElement
 
 class Display:
     def __init__(self, username, omnia_controller):
@@ -14,15 +17,18 @@ class Display:
 
         self.width = 320
         self.height = 240
-        self.img = Image.new("RGB", (self.width,self.height))
-        self.font = ImageFont.truetype('Arial.ttf', 40)
-        self.draw = ImageDraw.Draw(self.img)
+        self.ui = OmniaUI( (self.width, self.height), click_callback=self.clickCallback, debug=True )
 
         ## touch
         self.x = 0
         self.y = 0
 
         self.old_y = 0
+
+        self.count = 0
+
+        self.refresh_timeout = 2  # seconds
+        self.time = time.time()
 
     def getNotificationMessage(self, deviceName, username=None):
 
@@ -58,38 +64,58 @@ class Display:
         s_y = s_coords[1]
 
         if s_x != '0' and s_y != '0':
-            self.x = int(s_x)
-            self.y = int(s_y)
-            print(self.x, self.y)
-            self.scale_coords()
-            print(self.x, self.y)
+            x = int(s_x)
+            y = int(s_y)
+            #print(self.x, self.y)
+            self.x, self.y = self.scale_coords(x,y)
+            #print(self.x, self.y)
+            self.ui.click((self.x, self.y))
     
-    def scale_coords(self):
-        scaled_x = int( self.x * (self.height/240))
-        scaled_y = int( self.y * (self.width/320))
-        self.x = abs( scaled_y - self.width)
-        self.y = abs( scaled_x - self.height)
+    def scale_coords(self, x, y):
+        scaled_x = int( x * (self.height/240))
+        scaled_y = int( y * (self.width/320))
+        r_x = abs( scaled_y - self.width)
+        r_y = abs( scaled_x - self.height)
+
+        return r_x, r_y
+    
+    def clickCallback(self, button):
+        #button.setText("count")
+        self.count += 1
+        self.label.setText("count: "+str(self.count))
+        self.ui.refresh_image()
+        self.send_img()
+        print("button '{}' clicked".format(button.id))
 
     def send_img(self):
-        self.img.rotate(90, expand=True)
+        img = self.ui.get_image()
+        img=img.convert("RGB")
+        #img.rotate(90, expand=True)
 
-        self.device.omniacls.sendDisplay(self.img)
+        self.device.omniacls.sendDisplay(img)
 
     def start(self):
         self.device.omniacls.startRecvTouch(self.touchCallback)
-        self.img.paste((0,0,0), [0,0,self.width,self.height])
+        self.ui.clear_image()
+
+        self.button = OmniaUIElement("btn", "button", (10,10), "click me", clickable=True)
+
+        self.label = OmniaUIElement("lbl", "label", (10,50), "count: 0", background_color=self.ui.background_color, outline_color=self.ui.background_color)
+
+        self.ui.addElement(self.button)
+        self.ui.addElement(self.label)
+        self.ui.refresh_image()
 
         self.send_img()
     
     def run(self):
 
         if self.device:
-            if self.y != self.old_y:
-                self.old_y = self.y
-                self.img.paste((0,0,0), [0,0,self.width,self.height])
-                r = 10
-                self.draw.ellipse([(self.x-r, self.y-r), (self.x+r, self.y+r)], fill=(255,0,0))
-                self.draw.text((10,60), str(self.x)+","+str(self.y), font=self.font, fill=(255,255,255,255))
-
+            #if self.y != self.old_y:
+                #self.old_y = self.y
+                #self.ui.clear_image()
+            if time.time() - self.time > self.refresh_timeout:
+                self.time = time.time()
+                self.ui.refresh_image()
                 self.send_img()
     
