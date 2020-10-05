@@ -1,5 +1,6 @@
 from PIL import Image, ImageDraw, ImageFont
 import logging
+import time
 
 class OmniaUI:
 
@@ -39,12 +40,16 @@ class OmniaUI:
         # Debug
         self.debug = debug
         self.debug_point = None
+        self.debug_point_time = time.time()
 
         ### Logging ###
         logging.getLogger("PIL").setLevel(logging.WARNING)
         self.log = logging.getLogger('OmniaUI')
         ### --- ###
     
+    def _draw_debug_point(self):
+        self.draw.ellipse(self.debug_point, fill=(255,0,0))
+
     def click(self, coordinates):
         x = coordinates[0]
         y = coordinates[1]
@@ -56,7 +61,7 @@ class OmniaUI:
             if self.debug:
                 r = 5
                 self.debug_point = [(x-r, y-r), (x+r, y+r)]
-                self.draw.ellipse(self.debug_point, fill=(255,0,0))
+                #self._draw_debug_point()
             
             for button_id in self.buttons:
                 button = self.buttons[button_id]
@@ -138,6 +143,10 @@ class OmniaUI:
         
         for label_id in self.labels:
             self._draw_element(self.labels[label_id])
+        
+        if self.debug:
+            if self.debug_point:
+                self._draw_debug_point()
 
     def show_image(self):
         self.image.show()

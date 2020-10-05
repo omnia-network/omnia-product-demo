@@ -111,11 +111,8 @@ class Display:
     def run(self):
 
         if self.device:
-            #if self.y != self.old_y:
-                #self.old_y = self.y
-                #self.ui.clear_image()
-            if time.time() - self.time > self.refresh_timeout:
-                self.time = time.time()
+            if self.y != self.old_y:
+                self.old_y = self.y
                 self.ui.refresh_image()
                 self.send_img()
     
