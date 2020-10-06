@@ -332,6 +332,9 @@ class OmniaUI:
 
                 ui_element = OmniaUIElement(elem_id, elem_type, position, text)
 
+                if elem_type == "button":
+                    ui_element.clickable = True
+
                 if "image" in elem:
                     image = elem["image"]
                     if "text" in image:
@@ -443,7 +446,7 @@ class OmniaUIElement:
         x = coordinates[0]
         y = coordinates[1]
 
-        if (self.x0 - bias <= x <= self.x1 + bias) and (self.y0 - bias <= y <= self.y1 + bias) and self.clickable:
+        if (self.x0 - bias <= x <= self.x1 + bias) and (self.y0 - bias <= y <= self.y1 + bias) and self.clickable and self.visible:
             return True
         else:
             return False
