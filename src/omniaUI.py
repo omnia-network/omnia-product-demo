@@ -1,6 +1,8 @@
 from PIL import Image, ImageDraw, ImageFont
 import logging
 import time
+import xml.etree.ElementTree as ET
+from ast import literal_eval as make_tuple
 
 class OmniaUI:
 
@@ -21,6 +23,11 @@ class OmniaUI:
         # Image utilities
         self.image = Image.new("RGBA", (self.width, self.height), background_color)
         self.draw = ImageDraw.Draw(self.image)
+        
+        self.orientation = "landscape"
+
+        if self.width < self.height:
+            self.orientation = "portrait"
 
         # Colors
         self.background_color = background_color
@@ -41,6 +48,10 @@ class OmniaUI:
         self.debug = debug
         self.debug_point = None
         self.debug_point_time = time.time()
+
+        # XML
+        #self.tree = None
+        self.root = None
 
         ### Logging ###
         logging.getLogger("PIL").setLevel(logging.WARNING)
@@ -78,14 +89,15 @@ class OmniaUI:
             #raise ValueError("Click coordinates '{}' outside image".format((x,y)))
             self.log.error("Click coordinates '{}' outside image".format((x,y)))
     
-    ### BUTTONS ###
+    ### ELEMENTS ###
 
     def _draw_element(self, element):
-        if element.image:
-            self.image.paste(element.image, element.box[0], mask=element.image)
-        else:
-            self.draw.rectangle(element.box, fill=element.background_color, outline=element.outline_color)
-            self.draw.text(( element.x0 + element.padding, element.y0 + element.padding ), element.text, fill=element.text_color, font=element.font)
+        if element.visible:
+            if element.image:
+                self.image.paste(element.image, element.box[0], mask=element.image)
+            else:
+                self.draw.rectangle(element.box, fill=element.background_color, outline=element.outline_color)
+                self.draw.text(( element.x0 + element.padding, element.y0 + element.padding ), element.text, fill=element.text_color, font=element.font)
 
     def addElement(self, element):
         element_id = element.id
@@ -130,10 +142,6 @@ class OmniaUI:
     
     ### --- ###
 
-    ### LABELS ###
-
-    ### --- ###
-
     ### IMAGE ###
 
     def refresh_image(self):
@@ -154,15 +162,50 @@ class OmniaUI:
     def clear_image(self, box=None):
         if not box:
             box = [0,0,self.width,self.height]
+            #print(box)
         
         if self.background_image:
             self.image.paste(self.background_image, box)
         else:
             self.image.paste(self.background_color, box)
     
+    def reset_image(self):
+        self.buttons = {}
+        self.labels = {}
+        self.background_image = None
+        self.background_color = (255,255,255)
+
     def get_image(self):
+        self.refresh_image()
         return self.image.copy()
     
+    def _invert_dimensions(self):
+        old_width = self.width
+        self.width = self.height
+        self.height = old_width
+
+        self.image = self.image.resize((self.width, self.height))
+        self.draw = ImageDraw.Draw(self.image)
+
+    def changeOrientation(self):
+        if self.orientation == "portrait":
+            self.orientation = "landscape"
+                
+        elif self.orientation == "landscape":
+            self.orientation = "portrait"
+        
+        self._invert_dimensions()
+
+        if self.background_image:
+            #self.background_image = self.background_image.rotate(self.rotation, expand=True)
+            self.background_image = self.background_image.resize((self.width, self.height))
+
+        #print(self.width, self.height)
+        self.refresh_image()
+    
+    def getOrientation(self):
+        return self.orientation
+
     ### --- ###
 
     ### COLORS ###
@@ -179,12 +222,131 @@ class OmniaUI:
 
     ### --- ###
 
+    ### XML ###
+
+    def loadFromXMLFile(self, filename):
+        tree = ET.parse(filename)
+        self.root = tree.getroot()
+        self._load_xml()
+    
+    def loadFromXML(self, xml_string):
+        self.root = ET.fromstring(xml_string)
+        self._load_xml()
+
+    def _load_xml(self):
+        self.reset_image()
+
+        if "dimensions" in self.root.attrib:
+            dim = make_tuple(self.root.attrib["dimensions"])
+            self.width = dim[0]
+            self.height = dim[1]
+            self.image = Image.new("RGBA", (self.width, self.height), self.background_color)
+            self.draw = ImageDraw.Draw(self.image)
+        
+        if "orientation" in self.root.attrib:
+            self.orientation = self.root.attrib["orientation"]
+
+            #print(self.orientation, self.width, self.height)
+
+            if self.orientation == "landscape" and self.width < self.height:
+                self._invert_dimensions()
+            elif self.orientation == "portrait" and self.width >= self.height:
+                self._invert_dimensions()
+
+        if "bg-color" in self.root.attrib:
+            self.background_color = make_tuple(self.root.attrib["bg-color"])
+
+        if "bg-image" in self.root.attrib:
+            img = Image.open(self.root.attrib["bg-image"])
+            img = img.convert("RGBA")
+            img = img.resize((self.width, self.height))
+            self.background_image = img
+
+        for child in self.root:
+            elem_id = child.attrib['id']
+            elem_type = child.tag
+            elem = {}
+            for sub_child in child:
+                if sub_child.text:
+                    if sub_child.tag == "image" and "dimensions" in sub_child.attrib:
+                        elem[sub_child.tag] = {"text": sub_child.text, "dimensions": make_tuple(sub_child.attrib["dimensions"])}
+                    else:
+                        elem[sub_child.tag] = sub_child.text
+            
+            #print(elem)
+            
+            if len(elem) > 0:
+                if "position" in elem:
+                    position = elem["position"]
+                    position = make_tuple(position)
+                else:
+                    #raise ValueError("Position property is required (not found in element with id: '{}')".format(elem_id))
+                    self.log.error("Position property is required (not found in element with id: '{}')".format(elem_id))
+                
+                
+                if "text" in elem:
+                    text = elem["text"]
+                else:
+                    #raise ValueError("Text property is required (not found in element with id: '{}')".format(elem_id))
+                    self.log.error("Text property is required (not found in element with id: '{}')".format(elem_id))
+
+                ui_element = OmniaUIElement(elem_id, elem_type, position, text)
+
+                if "image" in elem:
+                    image = elem["image"]
+                    if "text" in image:
+                        img = Image.open(image["text"])
+                        img = img.convert("RGBA")
+                        img = img.resize(image["dimensions"])
+                        ui_element.addImage(img)
+                
+                
+                if "visible" in elem:
+                    visible = elem["visible"]
+                    if visible in ['true', 'True', '1']:
+                        ui_element.visible = True
+                    elif visible in ['false', 'False', '0']:
+                        ui_element.visible = False
+
+                
+                if "dimensions" in elem:
+                    dimensions = elem["dimensions"]
+                    dimensions = make_tuple(dimensions)
+                    ui_element.setDimensions(dimensions)
+
+                if "text-color" in elem:
+                    text_color = elem["text-color"]
+                    text_color = make_tuple(text_color)
+                    ui_element.setTextColor(text_color)
+
+                if "background-color" in elem:
+                    background_color = elem["background-color"]
+                    background_color = make_tuple(background_color)
+                    ui_element.setBackgroundColor(background_color)
+                else:
+                    if elem_type == "label":
+                        ui_element.setBackgroundColor(self.background_color)
+                
+                if "outline-color" in elem:
+                    outline_color = elem["outline-color"]
+                    outline_color = make_tuple(outline_color)
+                    ui_element.setOutlineColor(outline_color)
+                else:
+                    if elem_type == "label":
+                        ui_element.setOutlineColor(self.background_color)
+                
+                self.addElement(ui_element)
+        
+        self.refresh_image()
+
+    ### --- ###
+
 class OmniaUIElement:
 
     padding = 5
     default_font = ImageFont.truetype("Arial.ttf", 20)
 
-    def __init__(self, id, element_type, position, text, image=None, clickable=False, dimensions=(70,30), text_color=(0,0,0), text_font=None, background_color=(230, 230, 230), outline_color=(166, 166, 166)):
+    def __init__(self, id, element_type, position, text, image=None, clickable=False, visible=True, dimensions=(70,30), text_color=(0,0,0), text_font=None, background_color=(230, 230, 230), outline_color=(166, 166, 166)):
 
         # Id
         self.id = id
@@ -214,6 +376,9 @@ class OmniaUIElement:
         self.y1 = 0
 
         self.box = []
+
+        # Visible
+        self.visible = visible
 
         # Colors
         self.text_color = text_color
