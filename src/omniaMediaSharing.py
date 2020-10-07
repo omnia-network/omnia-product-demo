@@ -41,3 +41,19 @@ class OmniaMediaSharing:
         if username in self.userMedia:
             if "text" in self.userMedia[username]:
                 self.userMedia[username]["text"] = self.userMedia[username]["text"][:-nChar]
+
+    def setAttribute(self, username, attribute, value=''):
+        if username in self.userMedia:
+            self.userMedia[username][attribute] = value
+        else:
+            self.userMedia.__setitem__(username, {attribute: value})
+    
+    def getAttribute(self, username, attribute):
+        if username in self.userMedia:
+            if attribute in self.userMedia[username]:
+                return self.userMedia[username][attribute]
+            else:
+                print("attribute '{}' not found for user {}".format(attribute, username))
+                return None
+        else:
+            print("user '{}' not found".format(username))
