@@ -400,7 +400,7 @@ class OmniaClass:
                 chunk_size
                 ], 'A'))
     
-    def stopAudio(self, framerate, channels, sampwidth, notify=True):
+    def stopAudio(self, notify=True):
         if((self.notifyStarted and notify) or (not self.notifyStarted)):
             self.__sendc(self.__packMessage([
                 0
