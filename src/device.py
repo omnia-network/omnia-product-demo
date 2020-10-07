@@ -42,6 +42,8 @@ class Device(threading.Thread):
         self.omniacls = OmniaClass(self.log, deviceData)
         self.reader = None
         self.writer = None
+
+        self.omnia_controller = omnia_controller
         ### --- ###
 
         ### Device Data ###
@@ -113,7 +115,12 @@ class Device(threading.Thread):
             if self.iot_function:
                 self.iot_function.run()
 
-            await asyncio.sleep(0.01)
+                if hasattr(self.iot_function, "time_sleep"):
+                    await asyncio.sleep(self.iot_function.time_sleep)
+                else:
+                    await asyncio.sleep(0.001)
+            else:
+                await asyncio.sleep(0.1)
 
     def NFCCallback(self, nfc):
 
@@ -200,6 +207,13 @@ class Device(threading.Thread):
         # self.runIOTFunction(f)
 
         # f = Display("eulero", None)
+        # f.handleStreaming(self)
+        # self.runIOTFunction(f)
+
+        # self.omnia_controller.addUser({"name": "eulero", "uid":"eulero"})
+        # self.omnia_controller.omnia_media_sharing.setAttribute("eulero", "pause", True)
+
+        # f = self.omnia_controller.getIOTFunction("eulero", self.type)
         # f.handleStreaming(self)
         # self.runIOTFunction(f)
 
