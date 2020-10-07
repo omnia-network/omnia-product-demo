@@ -15,5 +15,8 @@
     },
     "ble": {
         "no_config":0
+    },
+    "config": {
+        "needed": false
     }
 }

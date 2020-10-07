@@ -10,10 +10,8 @@ class Display:
         self.device = 0
         self.username = username
         self.omnia_controller = omnia_controller
-        #self.sharing = self.omnia_controller.omnia_media_sharing
+        self.sharing = self.omnia_controller.omnia_media_sharing
         self.deviceChanged = True
-        
-        self.text = ''
 
         self.width = 320
         self.height = 240
@@ -27,8 +25,18 @@ class Display:
 
         self.count = 0
 
-        self.refresh_timeout = 2  # seconds
+        self.refresh_timeout = 1  # seconds
         self.time = time.time()
+
+        # UI elements
+        self.song_time = None
+        self.song_duration = None
+        self.dot = None
+        
+        # song parameters
+        self.song_length = 1
+        self.elapsed_seconds = 0
+        self.pause = True
 
     def getNotificationMessage(self, deviceName, username=None):
 
@@ -81,8 +89,32 @@ class Display:
     
     def clickCallback(self, button):
         #button.setText("count")
-        self.count += 1
-        self.label.setText("count: "+str(self.count))
+        #self.count += 1
+        if button.id == "play":
+            button.visible = False
+            pause = self.ui.getElement("pause")
+            pause.visible = True
+            self.pause = False
+            self.sharing.setAttribute(self.username, "pause", False)
+        elif button.id == "pause":
+            button.visible = False
+            play = self.ui.getElement("play")
+            play.visible = True
+            self.pause = True
+            self.sharing.setAttribute(self.username, "pause", True)
+        
+        if button.id == "prev":
+            self.elapsed_seconds = 0
+                
+            self.sharing.setAttribute(self.username, "prev", True)
+
+            x = int(self.elapsed_seconds * ((self.width - 18)/self.song_length))
+            self.dot.setPosition((x,175))
+
+            self.ui.refresh_image()
+            self.send_img()
+
+        #self.label.setText("count: "+str(self.count))
         self.ui.refresh_image()
         self.send_img()
         print("button '{}' clicked".format(button.id))
@@ -98,21 +130,49 @@ class Display:
         self.device.omniacls.startRecvTouch(self.touchCallback)
         self.ui.clear_image()
 
-        self.button = OmniaUIElement("btn", "button", (10,10), "click me", clickable=True)
+        self.ui.loadFromXMLFile("src/iot_funct/resources/home.xml")
 
-        self.label = OmniaUIElement("lbl", "label", (10,50), "count: 0", background_color=self.ui.background_color, outline_color=self.ui.background_color)
+        self.song_time = self.ui.getElement("song-time")
+        self.song_duration = self.ui.getElement("song-duration")
+        self.dot = self.ui.getElement("circle")
 
-        self.ui.addElement(self.button)
-        self.ui.addElement(self.label)
-        self.ui.refresh_image()
+        x = int(self.elapsed_seconds * ((self.width - 18)/self.song_length))
+        self.dot.setPosition((x,175))       
 
         self.send_img()
+
+        self.time = time.time()
     
     def run(self):
 
         if self.device:
-            if self.y != self.old_y:
-                self.old_y = self.y
+
+            if time.time() - self.time > self.refresh_timeout:
+                self.time = time.time()
+
+                # display song lenght
+                self.song_length = self.sharing.getAttribute(self.username, "duration")
+                if self.song_length:
+                    duration = "{}:{:02}".format( int(self.song_length) // 60, int(self.song_length) % 60 )
+                    self.song_duration.setText(duration)
+                else:
+                    self.song_length = 1
+
+                self.elapsed_seconds = self.sharing.getAttribute(self.username, "elapsed_time")
+                if not self.elapsed_seconds:
+                    self.elapsed_seconds = 0
+                
+                if not self.pause:
+                    self.song_time.setText("{}:{:02}".format(int(self.elapsed_seconds) // 60, int(self.elapsed_seconds) % 60))
+                    
+                    x = int(self.elapsed_seconds * ((self.width - 18)/self.song_length))
+                    self.dot.setPosition((x,175))
+
                 self.ui.refresh_image()
                 self.send_img()
+
+            '''if self.y != self.old_y:
+                self.old_y = self.y
+                self.ui.refresh_image()
+                self.send_img()'''
     
