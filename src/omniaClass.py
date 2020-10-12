@@ -56,6 +56,7 @@ class OmniaClass:
         ### Receive data ###
         self.data = None
         self.__recvType = 'button'
+        self.__old_recvType = 'button'
         ### --- ###
 
         ### Buttons Callback ###
@@ -161,6 +162,13 @@ class OmniaClass:
     ### Receive Data ###
     '''
 
+    def setRecvType(self, recv_type):
+        self.__old_recvType = self.__recvType
+        self.__recvType = recv_type
+    
+    def resetRecvType(self):
+        self.__recvType = self.__old_recvType
+
     # this is the receive callback
     def receivedData(self, data):
         self.data = data
@@ -223,9 +231,9 @@ class OmniaClass:
     def calculateLatency(self, iterations=10, future=None):
         self.sendLatencyMessage()
         self.latency_iterations = iterations
-        self.__recvType = 'latency'
+        self.setRecvType('latency')
         self.__latency_cb = future
-        self.log.debug("calculating latency... {}".format(self.__recvType))
+        self.log.debug("calculating latency...")
 
     def receivedLatency(self, response):
         if response != '':
@@ -333,11 +341,11 @@ class OmniaClass:
     ### Touchscreen ###
     '''
     def startRecvTouch(self, callback):
-        self.__recvType = 'touch'
+        self.setRecvType('touch')
         self.__touch_cb = callback
     
     def stopRecvTouch(self, callback):
-        self.__recvType = 'button'
+        self.resetRecvType()
         self.__touch_cb = None
     
     def receivedTouch(self, data):
@@ -365,14 +373,14 @@ class OmniaClass:
             1
         ], 'f'))
         self.__nfc_cb = nfc_cb
-        self.__recvType = 'nfc'
+        self.setRecvType('nfc')
     
     def stopRecvNFC(self):
         self.__send(self.__packMessage([
             0
         ], 'f'))
         self.__nfc_cb = None
-        self.__recvType = 'button'
+        self.resetRecvType()
 
     def setNFCCallback(self, nfc_cb):
         self.__nfc_cb = nfc_cb
@@ -399,7 +407,7 @@ class OmniaClass:
             1
         ], 'b'))            # start BLE scan
         self.__ble_cb = ble_cb
-        self.__recvType = 'ble'
+        self.setRecvType('ble')
         self.log.debug("starting BLE scan")
     
     def stopRecvBLE(self):
@@ -407,7 +415,7 @@ class OmniaClass:
             0
         ], 'b'))
         self.__ble_cb = None
-        self.__recvType = 'button'
+        self.resetRecvType()
         self.log.debug("stopping BLE scan")
 
     def setBLECallback(self, ble_cb):
@@ -461,7 +469,7 @@ class OmniaClass:
 
     def startRecvADC(self, adc_cb, pin):
         self.__adc_cb = adc_cb
-        self.__recvType = 'adc'
+        self.setRecvType('adc')
         self.__send(self.__packMessage([
             1,
             pin
@@ -472,7 +480,7 @@ class OmniaClass:
             0
         ], 'A'))
         self.__adc_cb = None
-        self.__recvType = 'button'
+        self.resetRecvType()
 
     def setADCCallback(self, adc_cb):
         self.__adc_cb = adc_cb
@@ -500,7 +508,7 @@ class OmniaClass:
     
     def startRecvI2C(self, i2c_cb, addr, nbytes):
         self.__i2c_cb = i2c_cb
-        self.__recvType = 'i2c'
+        self.setRecvType('i2c')
         self.log.debug("start receiving I2C")
         self.__send(self.__packMessage([
                 1,
@@ -514,7 +522,7 @@ class OmniaClass:
                 0
                 ], 'c'))
         self.__i2c_cb = None
-        self.__recvType = 'button'
+        self.resetRecvType()
 
     def setI2CCallback(self, i2c_cb):
         self.__i2c_cb = i2c_cb
@@ -604,7 +612,7 @@ class OmniaClass:
 
     def startNotify(self, click_button_cb):
         self.__old_button_cb = self.__button_cb # will be reused when notification ends
-        self.__recvType = 'button'
+        self.setRecvType('button')
         self.__button_cb = click_button_cb
 
         self.notifyStarted = True
@@ -614,7 +622,7 @@ class OmniaClass:
         self.config["contrast"] = not self.config["contrast"]
 
     def stopNotify(self):
-        self.__recvType = 'button'
+        self.setRecvType('button')
         self.__button_cb = self.__old_button_cb
         
         self.notifyStarted = False
