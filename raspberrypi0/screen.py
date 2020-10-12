@@ -24,8 +24,6 @@ class Screen:
         self.stopStream = False
         self.pauseStream = False
 
-        self.init_screen()
-
         ## Dimensions ##
         self.width = 320
         self.height = 240
@@ -35,6 +33,8 @@ class Screen:
 
         ## Frames ##
         self.frames = []
+
+        self.init_screen()
     
     def init_screen(self):
         '''import adafruit_rgb_display.ili9341 as ili9341
@@ -66,6 +66,13 @@ class Screen:
         
         cv2.namedWindow('frame', cv2.WINDOW_FREERATIO)
         cv2.setWindowProperty('frame', cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
+        img = Image.new("RGB",(320,240))
+        img.paste((0,0,0),[0,0,320,240])
+        frame = numpy.array(img)
+        cv2.imshow('frame', frame)
+        if(cv2.waitKey(100) & 0xFF == ord('e')):
+            pass
     
     '''async def image_to_data(self, image):
         """Generator function to convert a PIL image to 16-bit 565 RGB bytes."""
