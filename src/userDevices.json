@@ -1,5 +1,5 @@
 {
-    "eulero": ["keyboard","back_door","screen_1","screen_2"],
+    "eulero": ["keyboard","back_door","screen_1","screen_2","speaker"],
     "gaber": ["keyboard","back_door","screen_1","screen_2"],
     "mez": ["keyboard","back_door","screen_1","screen_2"]
 }

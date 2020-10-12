@@ -11,7 +11,11 @@
 
     "b827eb707bac": {
                         "name" : "screen_2",
-                        "class" : "sound"
+                        "class" : "display"
+    },
+    "b827eb468e6c": {
+        "name" : "speaker",
+        "class" : "sound"
     },
     "500291dedb70": {
         "name": "back_door",

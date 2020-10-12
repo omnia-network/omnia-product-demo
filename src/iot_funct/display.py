@@ -2,6 +2,7 @@ from PIL import Image, ImageDraw, ImageFont
 import io
 import asyncio
 import time
+import json
 
 from src.omniaUI    import OmniaUI, OmniaUIElement
 
@@ -28,10 +29,20 @@ class Display:
         self.refresh_timeout = 1  # seconds
         self.time = time.time()
 
+        self.volume = 5
+
         # UI elements
         self.song_time = None
         self.song_duration = None
         self.dot = None
+        self.song_name = None
+        self.cover = None
+        self.text_volume = None
+
+        with open("src/iot_funct/resources/playlist.json", "r") as p:
+            self.playlist = json.load(p)
+        
+        self.pl_index = "0"
         
         # song parameters
         self.song_length = 1
@@ -52,12 +63,15 @@ class Display:
     def handleStreaming(self, device):
         if self.device!=device:
             #print("setting new device", self.device, device)
+            if self.device != 0:
+                self.stop()
             old_device = self.device
             self.__setDevice(device)
             self.deviceChanged = True
             if old_device != 0:
-                old_device.omniacls.newImg()
-                old_device.omniacls.sendImg()
+                
+                #old_device.omniacls.newImg()
+                #old_device.omniacls.sendImg()
                 old_device.resetStreamingUser()
     
     def __setDevice(self, device):
@@ -103,7 +117,7 @@ class Display:
             self.pause = True
             self.sharing.setAttribute(self.username, "pause", True)
         
-        if button.id == "prev":
+        elif button.id == "prev":
             self.elapsed_seconds = 0
                 
             self.sharing.setAttribute(self.username, "prev", True)
@@ -113,6 +127,29 @@ class Display:
 
             self.ui.refresh_image()
             self.send_img()
+
+        elif button.id == "next":
+            self.elapsed_seconds = 0
+                
+            self.sharing.setAttribute(self.username, "next", True)
+
+            x = int(self.elapsed_seconds * ((self.width - 18)/self.song_length))
+            self.dot.setPosition((x,175))
+
+            self.ui.refresh_image()
+            self.send_img()
+        
+        elif button.id == "vup":
+            if self.volume < 10:
+                self.volume += 1
+                self.text_volume.setText(str(self.volume))
+                self.sharing.setAttribute( self.username, "volume", self.volume)
+
+        elif button.id == "vdown":
+            if self.volume > 0:
+                self.volume -= 1
+                self.text_volume.setText(str(self.volume))
+                self.sharing.setAttribute( self.username, "volume", self.volume)
 
         #self.label.setText("count: "+str(self.count))
         self.ui.refresh_image()
@@ -126,6 +163,18 @@ class Display:
 
         self.device.omniacls.sendDisplay(img)
 
+    def setSongInfo(self):
+        self.song_title = self.playlist[self.pl_index]["name"]
+        self.song_author = self.playlist[self.pl_index]["author"]
+        self.song_cover = self.playlist[self.pl_index]["cover"]
+
+        self.song_name.setText(self.song_title+" - "+self.song_author)
+
+        img = Image.open(self.song_cover)
+        img = img.convert("RGBA")
+        img = img.resize((160,160))
+        self.cover.addImage(img)
+
     def start(self):
         self.device.omniacls.startRecvTouch(self.touchCallback)
         self.ui.clear_image()
@@ -136,19 +185,36 @@ class Display:
         self.song_duration = self.ui.getElement("song-duration")
         self.dot = self.ui.getElement("circle")
 
+        self.song_name = self.ui.getElement("song-name")
+        self.cover = self.ui.getElement("cover")
+
+        self.text_volume = self.ui.getElement("vlevel")
+
         x = int(self.elapsed_seconds * ((self.width - 18)/self.song_length))
         self.dot.setPosition((x,175))       
+
+        self.setSongInfo()
 
         self.send_img()
 
         self.time = time.time()
     
+    def stop(self):
+        self.ui.clear_image()
+        self.send_img()  
+
     def run(self):
 
         if self.device:
 
             if time.time() - self.time > self.refresh_timeout:
                 self.time = time.time()
+
+                index = self.sharing.getAttribute(self.username, "song_id")
+                if index:
+                    if index != self.pl_index:
+                        self.pl_index = index
+                        self.setSongInfo()
 
                 # display song lenght
                 self.song_length = self.sharing.getAttribute(self.username, "duration")

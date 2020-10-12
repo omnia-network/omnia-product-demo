@@ -40,6 +40,26 @@
         <background-color></background-color>
         <outline-color></outline-color>
     </button>
+
+    <button id='vup'>
+        <position>(10,40)</position>    <!--required-->
+        <text>vup</text>  <!--required-->
+        <image dimensions='(30,30)'>src/iot_funct/resources/vup.png</image>
+        <visible>true</visible>
+    </button>
+    <button id='vdown'>
+        <position>(10,110)</position>    <!--required-->
+        <text>vdown</text>  <!--required-->
+        <image dimensions='(30,30)'>src/iot_funct/resources/vdown.png</image>
+        <visible>true</visible>
+    </button>
+    <label id='vlevel'>
+        <position>(15,75)</position>    <!--required-->
+        <text>5</text>          <!--required-->
+        <text-color>(255,255,255)</text-color>
+        <font-size>18</font-size>
+    </label>
+
     <line id='track'>
         <start>(9,182)</start>
         <end>(310,182)</end>
@@ -59,7 +79,7 @@
     <label id='cover'>
         <position>(80,10)</position>    <!--required-->
         <text>cover</text>          <!--required-->
-        <image dimensions='(160,160)'>src/iot_funct/resources/cover.jpg</image>
+        <image dimensions='(160,160)'>src/iot_funct/resources/sally.jpg</image>
         <visible>true</visible>
         <dimensions></dimensions>
         <text-color>(255,255,255)</text-color>
@@ -68,7 +88,7 @@
     </label>
     <label id='song-name'>
         <position>(61,0)</position>    <!--required-->
-        <text>Vivere - Vasco Rossi</text>          <!--required-->
+        <text>-</text>          <!--required-->
         <image></image>
         <visible>true</visible>
         <dimensions></dimensions>

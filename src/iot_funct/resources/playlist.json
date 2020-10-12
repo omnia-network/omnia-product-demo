@@ -1,0 +1,14 @@
+{
+    "0":{
+        "name": "Sally",
+        "author": "Vasco Rossi",
+        "path": "src/audio/sally.wav",
+        "cover": "src/iot_funct/resources/sally.jpg"
+    },
+    "1":{
+        "name": "Vivere",
+        "author": "Vasco Rossi",
+        "path": "src/audio/vivere.wav",
+        "cover": "src/iot_funct/resources/vivere.jpg"
+    }
+}
