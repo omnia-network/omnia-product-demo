@@ -5,7 +5,7 @@ import asyncio
 from bleak import BleakScanner
 
 class OmniaClient:
-    def __init__(self, socket, device_type, touch=None):
+    def __init__(self, device_type, touch=None):
         self.pin_in = []
         self.oled = None
         self.adc_pin = None
@@ -13,13 +13,15 @@ class OmniaClient:
         self.nfc_rdr = None
         
         self.audio_out = None
-        self.send_type = None  # 0: touch, 1: nfc, 2: adc, 3: i2c, 4: ble
+        self.send_type = None  # 0: touch, 1: nfc, 2: adc, 3: i2c, 4: ble, 5: latency
+        self.old_send_type = None
 
         ## Asyncio ##
         self.loop = asyncio.new_event_loop()
 
         ## Socket ##
-        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=socket))
+        self.reader = None
+        self.writer = None
 
         ## BLE ##
         self.stopScan = False
@@ -39,6 +41,8 @@ class OmniaClient:
 
         ## Touch ##
         self.touch = None
+
+        self.latency_msg = None
 
         self.init_type(device_type, touch)
     
@@ -90,9 +94,11 @@ class OmniaClient:
                 self.bleDevices = await scanner.get_discovered_devices()
             '''for d in devices:
                 print(d)'''
+    
+    def setSocket(self, socket):
+        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=socket))
 
     def run(self):
-        
         recv_task = self.loop.create_task(self.recv())
         send_task = self.loop.create_task(self.send())
         
@@ -111,7 +117,7 @@ class OmniaClient:
             
             msg = None
 
-            if msg_type != 'S' and msg_type != 'j' and msg_type != 'v' and msg_type != 'a' and msg_type != 'd':
+            if msg_type != 'S' and msg_type != 'j' and msg_type != 'v' and msg_type != 'a' and msg_type != 'd' and msg_type != 'l':
                 msg = s.decode()[1:]
                 args = list(map(int, msg.split("-")))
                 print(args)
@@ -171,6 +177,12 @@ class OmniaClient:
                     self.display.setDisplay(msg)
                     print("done")
             
+            elif(msg_type == 'l'):  # respond to latency calculator
+                #print("latency request", msg)
+                self.old_send_type = self.send_type
+                self.latency_msg = msg
+                self.send_type = 5
+            
             await asyncio.sleep(0.01)
         print("end recv")
     
@@ -193,6 +205,12 @@ class OmniaClient:
                     ble_result += str(d.rssi)+'+'+str(d.name)+","
                 msg = ble_result
             
+            elif(self.send_type == 5):
+                if self.latency_msg:
+                    #print("responding to latency")
+                    msg = self.latency_msg.decode()
+                    self.send_type = self.old_send_type
+
             if msg is not '' and msg != old_msg:
                 old_msg = msg
                 to_send = msg.encode()

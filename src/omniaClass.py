@@ -84,6 +84,8 @@ class OmniaClass:
 
         ### Protocol ###
         self.send_fn = None
+
+        self.stream_types = ['a', 'v', 'S', 'd', 'l']
         ### --- ###
 
         ### Notification ###
@@ -92,6 +94,15 @@ class OmniaClass:
 
         ### Log ###
         self.log = logging
+        ### --- ###
+
+        ### Latency ###
+        self.l_time = 0.0
+        self.latency = 0.0
+        self.tot_latency = 0.0
+        self.latency_iterations = 10
+        self.n_latency_sends = 0
+        self.__latency_cb = None
         ### --- ###
 
         self.sc = None        
@@ -105,41 +116,20 @@ class OmniaClass:
 
     def setSendFunction(self, send_fn):
         self.send_fn = send_fn
-    
-    def __packImg(self, pic, msg_type):
 
-        b_msg = pic
+    def __packMessage(self, msg, msg_type):
+
+        if not msg_type in self.stream_types:
+            msg = '-'.join(map(str, msg))
+            msg = msg.encode()
         
         b_msg_type = msg_type.encode()
         
-        to_send = b_msg_type + b_msg #+ b'\n'
+        to_send = b_msg_type + msg #+ b'\n'
 
         #return to_send
 
-        return self.__setMsg(to_send)
-    
-    def __packAudio(self, samples):
-
-        b_msg = samples
-        
-        b_msg_type = "a".encode()
-        
-        to_send = b_msg_type + b_msg #+ b'\n'
-
-        #return to_send
-
-        return self.__setMsg(to_send)
-
-    def __packMessage(self, args, msg_type):
-
-        msg = '-'.join(map(str, args))
-        b_msg = msg.encode()
-        
-        b_msg_type = msg_type.encode()
-        
-        to_send = b_msg_type + b_msg #+ b'\n'
-
-        #return to_send
+        #self.log.debug("sending message: {}".format(to_send))
 
         return self.__setMsg(to_send)
 
@@ -175,6 +165,8 @@ class OmniaClass:
     def receivedData(self, data):
         self.data = data
 
+        #self.log.debug("received data of type '{}'".format(self.__recvType))
+
         if self.__recvType == 'button':
             self.receivedButtons(int(data))
         elif self.__recvType == 'nfc':
@@ -188,6 +180,8 @@ class OmniaClass:
             self.receivedI2C(bytearray(data).replace(b'\n',b''))    # avoid reading '\n' at the end
         elif self.__recvType == 'touch':
             self.receivedTouch(data.decode().replace('\n',''))
+        elif self.__recvType == 'latency':
+            self.receivedLatency(data.decode().replace('\n',''))
     '''
     ### --- ###
     '''
@@ -213,6 +207,46 @@ class OmniaClass:
             self.log.debug("clicked {!r}".format(self.__clickedBtn))
             self.__button_cb(self.__clickedBtn)
     
+    '''
+    ### --- ###
+    '''
+
+    '''
+    ### Latency ###
+    '''
+
+    def sendLatencyMessage(self):
+        self.l_time = time.time()
+        self.__sendc(self.__packMessage(str(self.l_time).encode(), 'l'))
+        self.n_latency_sends += 1
+
+    def calculateLatency(self, iterations=10, future=None):
+        self.sendLatencyMessage()
+        self.latency_iterations = iterations
+        self.__recvType = 'latency'
+        self.__latency_cb = future
+        self.log.debug("calculating latency... {}".format(self.__recvType))
+
+    def receivedLatency(self, response):
+        if response != '':
+            self.tot_latency += (time.time() - float(response)) / 2
+            
+            if self.n_latency_sends == self.latency_iterations:
+
+                self.latency = (self.tot_latency / self.n_latency_sends) * 1000
+
+                self.n_latency_sends = 0
+
+                self.log.debug("latency: {} ms".format(self.latency))
+                if self.__latency_cb:
+                    self.__latency_cb.set_result(self.latency)
+            else:
+                self.sendLatencyMessage()
+    
+    def getLatency(self):
+        if self.latency > 0:
+            return self.latency
+
     '''
     ### --- ###
     '''
@@ -416,7 +450,7 @@ class OmniaClass:
                 ], 'J'))'''
     
     def sendAudio(self, samples):
-        self.__send(self.__packAudio(samples))
+        self.__send(self.__packMessage(samples, 'a'))
     '''
     ### --- ###
     '''
@@ -550,7 +584,9 @@ class OmniaClass:
                 
                 if ("i2c" in tmp):
                     self.I2CPins = tmp["i2c"]
-        
+            else:
+                self.log.debug("no config needed for this device")
+                
         self.canSend = True
 
     def getConfig(self, path):
@@ -613,12 +649,12 @@ class OmniaClass:
                 image.save(f, "jpeg")
                 buf = f.getbuffer()
 
-                self.__send(self.__packImg(buf, 'v'))
+                self.__send(self.__packMessage(buf, 'v'))
 
                 del buf
                 f.close()
             else:
-                self.__send(self.__packImg(b'0', 'v'))
+                self.__send(self.__packMessage(b'0', 'v'))
 
     '''
     ### --- ###
@@ -645,7 +681,7 @@ class OmniaClass:
                     #pic=pic.tobitmap()
                     #pic = bytearray(pic).hex()
                     #print(pic, len(pic))
-                    self.__send(self.__packImg(pic, "S"))
+                    self.__send(self.__packMessage(pic, "S"))
     
     def sendDisplay(self, image, notify=False):
         if((self.notifyStarted and notify) or (not self.notifyStarted)):
@@ -653,7 +689,7 @@ class OmniaClass:
             image.save(f, "jpeg")
             buf = f.getbuffer()
 
-            self.__send(self.__packImg(buf, 'd'))
+            self.__send(self.__packMessage(buf, 'd'))
 
             del buf
             f.close()

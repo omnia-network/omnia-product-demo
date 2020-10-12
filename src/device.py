@@ -99,9 +99,14 @@ class Device(threading.Thread):
 
     ''' --- '''
 
-    def init_config(self):
+    async def init_config(self):
         self.omniacls.getPinConfig("src/iot/"+self.name+"/pinout.json")
         self.omniacls.getConfig("src/iot/"+self.name+"/config.json")
+
+        latency_future = self.loop.create_future()
+        self.omniacls.calculateLatency(iterations=30, future=latency_future)
+
+        await latency_future
 
     def runIOTFunction(self, iot_function):
         self.log.debug("running iot function {!r}".format(iot_function))
@@ -148,12 +153,13 @@ class Device(threading.Thread):
                 if len(user)>=2:
                     rssi = int(user[0])
                     name = user[1]
-                    if rssi > -71:
-                        self.log.debug("user near {!r}".format(rssi))
-                        if rssi > nearestRSSI:
-                            nearestRSSI = rssi
-                            nearestName = name
-                            self.log.debug("user nearest {!r}".format(nearestName))
+                    if self.omnia_controller.isValidUser(name):
+                        if rssi > -71:
+                            self.log.debug("user near {!r}".format(rssi))
+                            if rssi > nearestRSSI:
+                                nearestRSSI = rssi
+                                nearestName = name
+                                self.log.debug("user nearest {!r}".format(nearestName))
             
             if nearestName != "":
                 self.nfc = nearestName
@@ -191,10 +197,8 @@ class Device(threading.Thread):
         self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=self.sc))
 
         self.omniacls.setSendFunction(self.send)
-        
-        self.init_config()
 
-        recv_task = self.loop.create_task(self.recv())
+        recv_task = self.loop.create_task(self.recv())        
 
         # used for tests
 
@@ -218,6 +222,8 @@ class Device(threading.Thread):
         # self.runIOTFunction(f)
 
         iot_task = self.loop.create_task(self.__run_iot())
+
+        self.loop.run_until_complete(self.init_config())
 
         #self.omniacls.startRecvNFC(self.NFCCallback)
         self.omniacls.startRecvBLE(self.BLECallback)

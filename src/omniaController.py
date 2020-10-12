@@ -130,3 +130,9 @@ class OmniaController:
                         device.streamingUser = ""
             
             return dev
+    
+    def isValidUser(self, user):
+        if user in self.users:
+            return True
+        else:
+            return False

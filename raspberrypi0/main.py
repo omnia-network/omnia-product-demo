@@ -13,6 +13,9 @@ host="192.168.0.2"
 #host="lucab.ddns.net"
 adress = socket.getaddrinfo(host,connport)[0][-1][0]
 
+client = OmniaClient('ili9341', touch='xpt2046')
+#client = OmniaClient(so, 'audio')
+
 so=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 so.connect((adress, connport))
 so.send(mac.encode())
@@ -24,8 +27,7 @@ so.send(mac.encode())
 #     socket.SO_RCVBUF,
 #     RECV_BUF_SIZE)
 
-client = OmniaClient(so, 'ili9341', touch='xpt2046')
-#client = OmniaClient(so, 'audio')
+client.setSocket(so)
 
 # run client firmware
 client.run()
