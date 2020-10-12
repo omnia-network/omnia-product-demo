@@ -31,6 +31,7 @@ class OmniaClient:
 
         ## Received Data ##
         self.received_data = None
+        self.stream_types = ['S', 'j', 'v', 'a', 'd', 'l']
         self.stop = False
 
         ## Display ##
@@ -42,6 +43,7 @@ class OmniaClient:
         ## Touch ##
         self.touch = None
 
+        ## Latency ##
         self.latency_msg = None
 
         self.init_type(device_type, touch)
@@ -117,7 +119,7 @@ class OmniaClient:
             
             msg = None
 
-            if msg_type != 'S' and msg_type != 'j' and msg_type != 'v' and msg_type != 'a' and msg_type != 'd' and msg_type != 'l':
+            if not msg_type in self.stream_types:
                 msg = s.decode()[1:]
                 args = list(map(int, msg.split("-")))
                 print(args)
