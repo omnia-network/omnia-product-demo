@@ -4,9 +4,11 @@ import time
 import asyncio
 
 class Profile:
-    def __init__(self, omniacls):
-        self.omniacls=omniacls
-
+    def __init__(self, username, omniacls, omnia_controller):
+        self.username = username
+        self.omniacls = omniacls
+        self.omnia_controller = omnia_controller
+        
         self.close_app = False
         self.pause = False
     
