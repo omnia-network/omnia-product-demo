@@ -122,7 +122,7 @@ class User(threading.Thread):
             if appName[0] != "_":   # do not import apps that start with "_"
                 self.log.debug("loading app: {!r}".format(appName.upper()))
                 appObj = getattr(importlib.import_module(self.name+".src."+appName), appName.capitalize())
-                self.applications.append(appObj(self.omniacls))
+                self.applications.append(appObj(self.name, self.omniacls, self.omnia_controller))
                 self.applications_name.append(appName.upper())
             else:
                 self.log.debug("ignoring app: {!r}".format(appName[1:].upper()))

@@ -3,8 +3,10 @@ import math
 import asyncio
 
 class Clock:
-    def __init__(self, omniacls):
-        self.omniacls=omniacls
+    def __init__(self, username, omniacls, omnia_controller):
+        self.username = username
+        self.omniacls = omniacls
+        self.omnia_controller = omnia_controller
 
         self.screenOff = False
         self.timestamp = datetime.datetime.now().timestamp()

@@ -1,8 +1,11 @@
 import asyncio
 
 class Settings:
-    def __init__(self, omniacls):
-        self.omniacls=omniacls
+    def __init__(self, username, omniacls, omnia_controller):
+        self.username = username
+        self.omniacls = omniacls
+        self.omnia_controller = omnia_controller
+        
         self.contrast=0
         self.rotation=0
         self.i = 0

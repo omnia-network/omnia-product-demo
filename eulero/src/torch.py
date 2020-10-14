@@ -1,8 +1,11 @@
 import asyncio
 
 class Torch:
-    def __init__(self, omniacls):
-        self.omniacls=omniacls
+    def __init__(self, username, omniacls, omnia_controller):
+        self.username = username
+        self.omniacls = omniacls
+        self.omnia_controller = omnia_controller
+        
         self.ledstatus=0
         self.npstatus=0
 
