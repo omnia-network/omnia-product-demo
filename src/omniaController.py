@@ -86,7 +86,7 @@ class OmniaController:
     def __removeNearDevice(self, device, user):
         if user in self.nearDevices:
             if device in self.nearDevices[user]:
-                device.stream=False
+                device.stream = False
                 self.nearDevices[user].remove(device)
 	
     def __updateNearDevices(self, user):

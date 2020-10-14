@@ -9,9 +9,9 @@ import asyncio
 import logging
 
 # used for tests
-from src.iot_funct.sound import Sound
-from src.iot_funct.screen import Screen
-from src.iot_funct.display import Display
+#from src.iot_funct.sound import Sound
+#from src.iot_funct.screen import Screen
+#from src.iot_funct.display import Display
 
 class Device(threading.Thread):
 
