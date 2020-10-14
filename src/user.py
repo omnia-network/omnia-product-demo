@@ -93,6 +93,7 @@ class User(threading.Thread):
 
     async def init_connection(self):
 
+        # initializize user watch
         pic=Image.open(self.name+"/src/images/pic.png")
         self.omniacls.setImg(pic)
         self.omniacls.sendImg()
@@ -104,25 +105,30 @@ class User(threading.Thread):
         self.omniacls.sendImg()
         #await asyncio.sleep(3)
 
+        # copy app names from user src directory
         userAppsPath = self.name+"/src/"
-
         apps = []
+
         if os.path.exists(userAppsPath):
+            apps.extend(list(os.walk(userAppsPath))[0][2])
+        """
             for (_, _, filenames) in os.walk(userAppsPath):
                 apps.extend(filenames)
                 break
-    
+        """
+        
         apps.sort()
-
+        # format app names and extend app objects
         self.prepareApps(apps)
     
     def prepareApps(self, apps):
         for app in apps:
             appName = app[:-3]      # remove .py extension
-            if appName[0] != "_":   # do not import apps that start with "_"
+            if appName[0] != "_":   # ignore apps that start with "_"
                 self.log.debug("loading app: {!r}".format(appName.upper()))
-                appObj = getattr(importlib.import_module(self.name+".src."+appName), appName.capitalize())
-                self.applications.append(appObj(self.omniacls))
+                # get app objects from user src and add them to user applications list
+                appCls = getattr(importlib.import_module(self.name+".src."+appName), appName.capitalize())
+                self.applications.append(appCls(self.omniacls))     # extend app objects with omnia class
                 self.applications_name.append(appName.upper())
             else:
                 self.log.debug("ignoring app: {!r}".format(appName[1:].upper()))
@@ -131,7 +137,7 @@ class User(threading.Thread):
         await asyncio.sleep(6)
         self.log.debug("loading MENU")
         Menu = getattr(importlib.import_module(self.name+".menu"), "Menu")
-        menu=Menu(self.omniacls, self.applications_name)
+        menu = Menu(self.omniacls, self.applications_name)
         
         i = 0
         self.log.debug("starting app: {!r}".format(self.applications_name[i]))
@@ -141,7 +147,6 @@ class User(threading.Thread):
                 self.log.debug("starting menu")
 
                 i = await menu.run()
-
                 self.log.debug("exited menu")
                 self.log.debug("starting app: {!r}".format(self.applications_name[i]))
             else:
@@ -159,10 +164,11 @@ class User(threading.Thread):
 
         self.omniacls.setSendFunction(self.send)
         
-        self.init_config()
+        self.init_config()      # initialize user pins and screen
 
         #init_task = self.loop.create_task(self.init_config())
 
+        # create concurrent tasks for receive, applications and notification so that they can run asynchronously
         recv_task = self.loop.create_task(self.recv())
 
         #asyncio.run(self.init_config())
