@@ -23,7 +23,7 @@ adress = socket.getaddrinfo(host,connport)[0][-1][0]
 
 so=socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 so.connect((adress, connport))
-so.send(mac.encode())
+so.send(mac)
 
 #time.sleep(1)
 
