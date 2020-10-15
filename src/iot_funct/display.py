@@ -82,12 +82,10 @@ class Display:
         if len(data) > 0:
             s_coords = data.split(',')
         
-        s_x = s_coords[0]
-        s_y = s_coords[1]
-
-        if s_x != '0' and s_y != '0':
+        if s_x.isdigit() and s_y.isdigit():
             x = int(s_x)
             y = int(s_y)
+
             #print(self.x, self.y)
             self.x, self.y = self.scale_coords(x,y)
             #print(self.x, self.y)
