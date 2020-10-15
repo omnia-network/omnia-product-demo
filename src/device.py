@@ -172,7 +172,7 @@ class Device(threading.Thread):
         return self.nfc
 
     def streamLater(self, username):
-        if username in self.connectLater:
+        if not username in self.connectLater:
             self.connectLater.append(username)
     
     def canStreamLater(self, username):

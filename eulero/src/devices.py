@@ -31,11 +31,15 @@ class Devices:
                 self.close_app = True
             else:
                 device = self.devices[self.i]
-                print(device.name)
-                devType = device.getDeviceType()
-                iot_function = self.omnia_controller.getIOTFunction(self.username, devType)
-                iot_function.handleStreaming(device)
-                device.runIOTFunction(iot_function)
+                #print(device.name)
+                if device.getStreamingUser() == self.username:
+                    device.resetStreamingUser()
+                elif device.getStreamingUser() == '':
+                    devType = device.getDeviceType()
+                    iot_function = self.omnia_controller.getIOTFunction(self.username, devType)
+                    device.setStreamingUser(self.username)
+                    iot_function.handleStreaming(device)
+                    device.runIOTFunction(iot_function)
 
         elif(clickedBtn == "DOWN"):
             if(self.i == len(self.devices)):    # go down until "MENU"
@@ -71,8 +75,12 @@ class Devices:
                 self.omniacls.setText((1,10+(self.i%self.n)*10),">", 255,self.omniacls.getFonts()[0])
                 # self.omniacls.setText((10,10),self.devices[self.n*(self.page-1)], 255,self.omniacls.getFonts()[0])
                 for x in range(0,self.n-1):
-                    if((self.page-1)*self.n+x+1 < len(self.devices)):
-                        self.omniacls.setText((10,10+(x+1)*10),self.devices[(self.page-1)*self.n+x+1].name, 255,self.omniacls.getFonts()[0])
+                    if((self.page-1)*self.n+x < len(self.devices)):
+                        dev = self.devices[(self.page-1)*self.n+x]
+                        self.omniacls.setText((10,10+(x)*10), dev.name, 255,self.omniacls.getFonts()[0])
+                        if dev.stream:
+                            self.omniacls.setText((80,10+ 10*x),"<->", 255, self.omniacls.getFonts()[0])
+                
                 if self.page == pages:
                     self.omniacls.setText((10, 10 + len(self.devices) % self.n * 10), "MENU", 255, self.omniacls.getFonts()[0])
 
