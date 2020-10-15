@@ -33,7 +33,7 @@ class NotifyService():
         self.threadType = ["screen", "keyboard", "console", "sound", "display"]
 
     def clickButtonCallback(self, clickedBtn):
-        self.log.debug("notification clicked "+clickedBtn)
+        self.log.debug("notification clicked " + clickedBtn)
         if(clickedBtn == "SELECT"):
             self.stop = True
             self.accepted = True
@@ -52,7 +52,7 @@ class NotifyService():
             devs = await self.omnia_controller.listNearDevices(self.username)
             
             for dev in devs: 
-                if((not (dev in self.recentDevices)) and (dev.getStreamingUser()=="")):
+                if (not dev in self.recentDevices) and dev.getStreamingUser() == "" and not dev.canStreamLater(self.username):
                     dev.setStreamingUser(self.username)
                     self.device=dev
 

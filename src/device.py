@@ -56,6 +56,7 @@ class Device(threading.Thread):
 
         ### Streaming ###
         self.isNear = False
+        self.connectLater = []
         self.stream = False
         self.streamingUser = ""
         ### --- ###
@@ -169,13 +170,24 @@ class Device(threading.Thread):
     
     def getNFC(self):
         return self.nfc
+
+    def streamLater(self, username):
+        if username in self.connectLater:
+            self.connectLater.append(username)
+    
+    def canStreamLater(self, username):
+        if username in self.connectLater:
+            return True
+
+        return False
     
     def resetStreamingUser(self):
         self.log.debug("resetting streaming user")
-        self.streamingUser=""
+        self.streamLater(self.streamingUser)
+        self.streamingUser = ""
         self.stream = False
-        self.isNear = False
-        #self.omniacls.startRecvNFC(self.NFCCallback)
+        # self.isNear = False
+        # self.omniacls.startRecvNFC(self.NFCCallback)
         self.omniacls.startRecvBLE(self.BLECallback)
         self.iot_function = None
     
