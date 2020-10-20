@@ -1,82 +1,74 @@
-'''from eulero.src.menu  		import Menu
-from eulero.src.clock 		import Clock
-from eulero.src.torch 		import Torch
-from eulero.src.weather	    import Weather
-from eulero.src.settings 	import Settings
-from eulero.src.stream      import Stream
-from eulero.src.profile     import ProfilePic'''
-
-from src.notifyService          import NotifyService
-from src.omniaClass             import OmniaClass
-
 from PIL   			            import Image
-import time
 import threading
 import os
 import importlib
 import asyncio
 import logging
 
+### Omnia libraries ###
+from src.notifyService          import NotifyService
+from src.omniaClass             import OmniaClass
+### --- ###
+
 class User(threading.Thread):
 
-    def __init__(self, socket, address, userData, omnia_controller=None):
+    def __init__(self, socket, address, user_data, omniaController=None):
 
         ### Socket ###
-        self.sc=socket
-        self.sc.setblocking(False)
-        self.address=address
+        self.socket = socket
+        self.socket.setblocking(False)  # async send and receive
+        self.address = address          # (IPAddress, Port)
         ### --- ###
 
         ### Thread ###
         threading.Thread.__init__(self)
-        self.name = userData["name"]
+        self.name = user_data["name"]
         ### --- ###
 
         ### Logging ###
-        logging.getLogger("PIL").setLevel(logging.WARNING)
+        logging.getLogger("PIL").setLevel(logging.WARNING)  # disable PIL library logging
         self.log = logging.getLogger(
-            self.name+'_{}_{}'.format(*self.address)
+            self.name + '_{}_{}'.format(*self.address)
         )
         ### --- ###
 
         ### Omnia Protocol and Class ###
-        self.loop = asyncio.new_event_loop()
+        self.loop = asyncio.new_event_loop()    # asyncio loop object
 
-        self.omniacls = OmniaClass(self.log, userData)
-        self.reader = None
-        self.writer = None
+        self.omniaClass = OmniaClass(self.log, user_data)   # new instance of OmniaClass for this user
+        self.reader = None      # asyncio StreamReader object
+        self.writer = None      # asyncio StreamWriter object
         ### --- ###
 
         ### Omnia Controller ###
-        self.omnia_controller = omnia_controller
+        self.omniaController = omniaController
         ### --- ###
 
         ### User Data ###
-        self.userData = userData
+        '''
+        user_data structure
+        {
+            "name": "user_name",
+            "uid": "user id"    # RFID or BLE
+        }
+        '''
+        self.user_data = user_data
         ### --- ###
 
         ### Applications ###
-        self.applications = []       #list of apps objects
-        self.applications_name = []  #list of apps names
-        ### --- ###       
-
-        ### I/O data ###
-        self.data=0
-        self.buttons={}
+        self.applications = []       # list of apps objects
+        self.applications_name = []  # list of apps names
         ### --- ###
+    
 
-        ### Flags ###
-        self.alive=True
-        self.canSend=True
-        ### --- ###
     
     ''' Send and Receive '''
 
-    async def recv(self):
+    async def recv(self):   # receiving task
         while True:
             self.log.debug("receiving data")
             data = await self.reader.readline()
-            self.omniacls.receivedData(data)
+            self.omniaClass.receivedData(data)
     
     async def __drain(self):
         await self.writer.drain()
@@ -87,106 +79,105 @@ class User(threading.Thread):
 
     ''' --- '''
 
-    def init_config(self):
-        self.omniacls.getPinConfig(self.name+"/src/config/pinout.json")
-        self.omniacls.getConfig(self.name+"/src/config/config.json")
+    def init_config(self):  # get initial configuration of pins and settings
+        self.omniaClass.getPinConfig(self.name + "/src/config/pinout.json")
+        self.omniaClass.getConfig(self.name + "/src/config/config.json")
 
-    async def init_connection(self):
-
-        pic=Image.open(self.name+"/src/images/pic.png")
-        self.omniacls.setImg(pic)
-        self.omniacls.sendImg()
+    async def init_connection(self):    # watch startup
+        # send user profile pic
+        pic = Image.open(self.name + "/src/images/pic.png")
+        self.omniaClass.setImg(pic)
+        self.omniaClass.sendImg()
         await asyncio.sleep(3)
 
-        self.omniacls.newImg()
-        self.omniacls.setText((10,0),"GBROS", 255,self.omniacls.getFonts()[1])
-        self.omniacls.setText((18,32),"V "+self.omniacls.getVersion(), 255,self.omniacls.getFonts()[1])
-        self.omniacls.sendImg()
-        #await asyncio.sleep(3)
+        # send Omnia version
+        self.omniaClass.newImg()
+        self.omniaClass.setText((10,0),"OMNIA", 255,self.omniaClass.getFonts()[1])
+        self.omniaClass.setText((18,32),"V "+ self.omniaClass.getVersion(), 255, self.omniaClass.getFonts()[1])
+        self.omniaClass.sendImg()
+        # await asyncio.sleep(3)
 
-        userAppsPath = self.name+"/src/"
+        userAppsPath = self.name + "/src/"    # path to user apps
 
+        # create list of files in src's user path
         apps = []
         if os.path.exists(userAppsPath):
             for (_, _, filenames) in os.walk(userAppsPath):
                 apps.extend(filenames)
                 break
     
-        apps.sort()
+        apps.sort()     # sort in alphabetical order
 
         self.prepareApps(apps)
     
     def prepareApps(self, apps):
         for app in apps:
-            appName = app[:-3]      # remove .py extension
-            if appName[0] != "_":   # do not import apps that start with "_"
-                self.log.debug("loading app: {!r}".format(appName.upper()))
-                appObj = getattr(importlib.import_module(self.name+".src."+appName), appName.capitalize())
-                self.applications.append(appObj(self.name, self.omniacls, self.omnia_controller))
-                self.applications_name.append(appName.upper())
+            app_name = app[:-3]     # remove .py extension
+            if app_name[0] != "_":      # do not import apps that start with "_"
+                self.log.debug("loading app: {!r}".format(app_name.upper()))
+                AppObj = getattr(importlib.import_module(self.name + ".src." + app_name), app_name.capitalize())    # import App class
+                self.applications.append(AppObj(self.name, self.omniaClass, self.omniaController))      # create App instance
+                self.applications_name.append(app_name.upper())     # append app name
             else:
-                self.log.debug("ignoring app: {!r}".format(appName[1:].upper()))
+                self.log.debug("ignoring app: {!r}".format(app_name[1:].upper()))
 
     async def runApps(self):
         await asyncio.sleep(6)
         self.log.debug("loading MENU")
-        Menu = getattr(importlib.import_module(self.name+".menu"), "Menu")
-        menu=Menu(self.omniacls, self.applications_name)
+        Menu = getattr(importlib.import_module(self.name + ".menu"), "Menu")  # import Menu class
+        menu = Menu(self.omniaClass, self.applications_name)    # create Menu instance
         
-        i = 0
+        i = 0   # index of app to run (-1 = Menu) from self.applications list
         self.log.debug("starting app: {!r}".format(self.applications_name[i]))
 
-        while(self.omniacls.isAlive()):
-            if(i==-1):
-                self.log.debug("starting menu")
-
-                i = await menu.run()
-
-                self.log.debug("exited menu")
+        while self.omniaClass.isAlive():
+            if i == -1:
+                self.log.debug("starting MENU")
+                i = await menu.run()    # start menu and finally get selected app index
+                self.log.debug("exited MENU")
                 self.log.debug("starting app: {!r}".format(self.applications_name[i]))
             else:
-                running_app = self.applications_name[i]
-
-                i = await self.applications[i].run()
-
+                running_app = self.applications_name[i]     # currently running app
+                i = await self.applications[i].run()    # start app and finally get selected app index
                 self.log.debug("exited {!r}".format(running_app))
                 if i != -1:
                     self.log.debug("starting app: {!r}".format(self.applications_name[i]))
 
     def run(self):
 
-        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=self.sc))
-
-        self.omniacls.setSendFunction(self.send)
+        # generate asyncio socket interfaces: 
+        #   reader <-> receive
+        #   writer <-> send 
+        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=self.socket))
+        self.omniaClass.setSendFunction(self.send)  # set omniaClass send function
         
+        # initialize configuration of pins and settings
         self.init_config()
 
-        #init_task = self.loop.create_task(self.init_config())
+        # create receive task
+        recv_task = self.loop.create_task(self.recv())  
 
-        recv_task = self.loop.create_task(self.recv())
+        # run init_connection as a task
+        self.loop.create_task(self.init_connection())   
 
-        #asyncio.run(self.init_config())
-        self.loop.create_task(self.init_connection())
-        #self.loop.run_until_complete(self.init_config())
-
-        #self.loop.run_until_complete(self.init_connection())
-
+        # create task to run the apps
         apps_task = self.loop.create_task(self.runApps())
 
-        notification = NotifyService(self.omniacls, self.omnia_controller, self.log)
-        notification_task = self.loop.create_task(notification.run())
+        ### Notification ###
+        notifyService = NotifyService(self.omniaClass, self.omniaController, self.log)   # create NotifyService instance
+        notify_service_task = self.loop.create_task(notifyService.run())   # create task to run the notify service
+        ### --- ###
 
         try:
-            # Run the event loop
-            self.loop.run_forever()
-        except KeyboardInterrupt:
-            self.log.debug("closing {!r} socket".format(self.name))
+            self.loop.run_forever() # run tasks continuously
+        except KeyboardInterrupt:   # stop if Ctrl-C
+            self.log.debug("closing {!r} thread".format(self.name))
             pass
 
-        self.loop.close()
+        self.loop.close()   # stop tasks and close loop
 
-    def resumeConnection(self, so):
-        self.sc = so
-        self.omniacls.getPinConfig(self.name+"/src/config/pinout.json")
-        self.omniacls.resumeImg()
+    def resumeConnection(self, socket):
+        self.socket = socket
+        self.omniaClass.getPinConfig(self.name + "/src/config/pinout.json")
+        self.omniaClass.resumeImg()
         self.log.debug("resumed")
