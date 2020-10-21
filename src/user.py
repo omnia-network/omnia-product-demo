@@ -34,7 +34,6 @@ class User(threading.Thread):
 
         ### Omnia Protocol and Class ###
         self.loop = asyncio.new_event_loop()    # asyncio loop object
-
         self.omniaClass = OmniaClass(self.log, user_data)   # new instance of OmniaClass for this user
         self.reader = None      # asyncio StreamReader object
         self.writer = None      # asyncio StreamWriter object
@@ -79,11 +78,13 @@ class User(threading.Thread):
 
     ''' --- '''
 
-    def init_config(self):  # get initial configuration of pins and settings
+    # get initial configuration of pins and settings
+    def initConfig(self):
         self.omniaClass.getPinConfig(self.name + "/src/config/pinout.json")
         self.omniaClass.getConfig(self.name + "/src/config/config.json")
 
-    async def init_connection(self):    # watch startup
+    # watch startup
+    async def initConnection(self):    
         # send user profile pic
         pic = Image.open(self.name + "/src/images/pic.png")
         self.omniaClass.setImg(pic)
@@ -152,13 +153,13 @@ class User(threading.Thread):
         self.omniaClass.setSendFunction(self.send)  # set omniaClass send function
         
         # initialize configuration of pins and settings
-        self.init_config()
+        self.initConfig()
 
         # create receive task
         recv_task = self.loop.create_task(self.recv())  
 
-        # run init_connection as a task
-        self.loop.create_task(self.init_connection())   
+        # run initConnection as a task
+        self.loop.create_task(self.initConnection())   
 
         # create task to run the apps
         apps_task = self.loop.create_task(self.runApps())
@@ -169,7 +170,7 @@ class User(threading.Thread):
         ### --- ###
 
         try:
-            self.loop.run_forever() # run tasks continuously
+            self.loop.run_forever()     # run tasks continuously
         except KeyboardInterrupt:   # stop if Ctrl-C
             self.log.debug("closing {!r} thread".format(self.name))
             pass

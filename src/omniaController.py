@@ -92,7 +92,7 @@ class OmniaController:
     def __updateNearDevices(self, user):
         for device in self.devices:
             if device.isNear:
-                if device.getNFC() == self.users[user]["uid"]:
+                if device.getLastNearUser() == self.users[user]["uid"]:
                     if device.name in self.userDevices[user]:
                         #device.omniacls.stopRecvNFC()
                         self.__addNearDevice(device, user)

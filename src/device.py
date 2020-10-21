@@ -1,5 +1,3 @@
-from src.omniaClass             import OmniaClass
-
 from PIL   			            import Image
 import time
 import threading
@@ -8,88 +6,88 @@ import importlib
 import asyncio
 import logging
 
-# used for tests
+### Omnia libraries ###
+from src.omniaClass             import OmniaClass
+
+'''# used for tests
 #from src.iot_funct.sound import Sound
 #from src.iot_funct.screen import Screen
-#from src.iot_funct.display import Display
+#from src.iot_funct.display import Display'''
+### --- ###
 
 class Device(threading.Thread):
 
-    def __init__(self, socket, address, deviceData, omnia_controller=None):
+    DEFAULT_WAIT_TIME = 0.1
+    WAIT_TIME_IOT = 0.001
+    MIN_BLE_RSSI = -70
+
+    def __init__(self, socket, address, device_data, omniaController=None):
 
         ### Socket ###
-        self.sc=socket
-        self.sc.setblocking(False)
-        self.address=address
+        self.socket = socket
+        self.socket.setblocking(False)  # async send and receive
+        self.address = address    # (IPAddress, Port)
         ### --- ###
 
         ### Thread ###
         threading.Thread.__init__(self)
-        self.name=deviceData["name"]
-        self.type=deviceData["class"]
+        self.name = device_data["name"]     # rename thread with the name of the device 
+        self.type = device_data["class"]   # device type
         ### --- ###
 
         ### Logging ###
-        logging.getLogger("PIL").setLevel(logging.WARNING)
+        logging.getLogger("PIL").setLevel(logging.WARNING)  # disable PIL library logging
         self.log = logging.getLogger(
             self.name+'_{}_{}'.format(*self.address)
         )
         ### --- ###
 
         ### Omnia Protocol and Class ###
-        self.loop = asyncio.new_event_loop()
-
-        self.omniacls = OmniaClass(self.log, deviceData)
-        self.reader = None
-        self.writer = None
-
-        self.omnia_controller = omnia_controller
+        self.loop = asyncio.new_event_loop()    # asyncio loop object
+        self.omniaClass = OmniaClass(self.log, device_data)   # new instance of OmniaClass for this user
+        self.reader = None      # asyncio StreamReader object
+        self.writer = None      # asyncio StreamWriter object
         ### --- ###
 
-        ### Device Data ###
-        self.deviceData = deviceData
+        ### Omnia Controller ###
+        self.omniaController = omniaController
         ### --- ###
 
-        ### Application ###
-        self.app = None
+        ### Device data ###
+        '''
+        device_data structure
+        {
+            "name": "device_name",
+            "class": "device_type"
+        }
+        '''        
+        self.device_data = device_data
+        ### --- ###
+
+        ### Proximity detection ###
+        self.is_near = False    # True when a user is detected
+        self.connect_later = []     # list users that can connect later
+        self.last_near_user = None
         ### --- ###
 
         ### Streaming ###
-        self.isNear = False
-        self.connectLater = []
-        self.stream = False
-        self.streamingUser = ""
+        self.stream = False     # True if the device is being used
+        self.streaming_user = ""    # id of the user that is using this device
         ### --- ###
 
         ### IOT functions ###
-        self.iot_function = None
-        ### --- ###        
-
-        ### I/O data ###
-        self.data = 0
-        self.buttons = {}
+        self.iot_function = None    # class from src/iot_funct that performs a function
         ### --- ###
-
-        ### Flags ###
-        self.alive = True
-        self.canSend = True
-        ### --- ###
-
-        ### NFC ###
-        self.nfc = None
-        ### --- ###
-
-        ### Handle send ###
-        self.sendType = None
-        ### --- ###
+    
+    
     
     ''' Send and Receive '''
 
-    async def recv(self):
+    async def recv(self):   # receiving task
         while True:
             self.log.debug("receiving data")
             data = await self.reader.readline()
-            self.omniacls.receivedData(data)
+            self.omniaClass.receivedData(data)
     
     async def __drain(self):
         await self.writer.drain()
@@ -100,103 +98,117 @@ class Device(threading.Thread):
 
     ''' --- '''
 
-    async def init_config(self):
-        self.omniacls.getPinConfig("src/iot/"+self.name+"/pinout.json")
-        self.omniacls.getConfig("src/iot/"+self.name+"/config.json")
+    # get initial configuration of pins and settings
+    async def initConfig(self):
+        self.omniaClass.getPinConfig("src/iot/" + self.name + "/pinout.json")
+        self.omniaClass.getConfig("src/iot/" + self.name + "/config.json")
 
         latency_future = self.loop.create_future()
-        self.omniacls.calculateLatency(iterations=30, future=latency_future)
+        self.omniaClass.calculateLatency(iterations=30, future=latency_future)
 
-        await latency_future
+        await latency_future    # await the result of latency calculation
 
+    # set the function the device have to run
     def runIOTFunction(self, iot_function):
         self.log.debug("running iot function {!r}".format(iot_function))
-        #self.omniacls.stopRecvNFC()
-        self.omniacls.stopRecvBLE()
-        iot_function.start()
-        self.iot_function = iot_function
+        #self.omniaClass.stopRecvNFC()
+        self.omniaClass.stopRecvBLE()   # stop scanning for BLE proximity
+        iot_function.start()    # execute the start function from iot_function class
+        self.iot_function = iot_function    # set the new iot_function to run
     
-    async def __run_iot(self):
+    # keep running selected iot_function
+    async def __runIOT(self):
         while True:
             if self.iot_function:
-                self.iot_function.run()
+                self.iot_function.run()     # run iot_function and return
 
+                wait_time = self.WAIT_TIME_IOT  # wait time for iot function (default)
+                
+                # check if iot_function has a timing that needs to be respected
                 if hasattr(self.iot_function, "time_sleep"):
-                    await asyncio.sleep(self.iot_function.time_sleep)
-                else:
-                    await asyncio.sleep(0.001)
+                    if self.iot_function.time_sleep > 0:
+                        wait_time = self.iot_function.time_sleep
+                
+                await asyncio.sleep(wait_time)
             else:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(self.DEFAULT_WAIT_TIME)
 
     def NFCCallback(self, nfc):
-
-        nfc=nfc.split(":")
-        if(len(nfc)>=2):
-            nfc=nfc[1]
-            if(not len(nfc)==8):
-                nfc='0'
-            else:
-                self.nfc = nfc
-                self.isNear = True
+        '''nfc = <nfc_id>:'''
+        nfc = nfc.split(":")
+        '''nfc = ["<nfc_id>", ""]'''
+        if(len(nfc) >= 2):  # check if received nfc is valid
+            nfc = nfc[1]
+            if(not len(nfc) == 8):  # received nfc id is not valid
+                nfc = '0'
+            else:   # a user is near!
+                self.last_near_user = nfc
+                self.is_near = True
                 self.log.debug("proximity {!r}".format(nfc))
     
     def BLECallback(self, ble):
-
+        ''' ble = <rssi>+<first_id>,<rssi>+<second_id>,...'''
         ble = ble.split(',')
 
-        nearestRSSI = -200
-        nearestName = ""
+        nearest_RSSI = -200     # out of range initial value
+        nearest_user = ""
 
-        if len(ble) >= 1:
+        if len(ble) >= 1:   # if at least one user is near
             for user in ble:
-                self.log.debug("user {!r}".format(user))
-                user = user.split("+")
-                if len(user)>=2:
+                user = user.split("+")  # split id and rssi
+                if len(user) >= 2:  # if it's valid
                     rssi = int(user[0])
-                    name = user[1]
-                    if self.omnia_controller.isValidUser(name):
-                        if rssi > -71:
-                            self.log.debug("user near {!r}".format(rssi))
-                            if rssi > nearestRSSI:
-                                nearestRSSI = rssi
-                                nearestName = name
-                                self.log.debug("user nearest {!r}".format(nearestName))
+                    user_id = user[1]
+                    if self.omniaController.isValidUser(user_id):   # if this user is registered in Omnia
+                        self.log.debug("detected user with id: '{!r}'".format(user_id))
+                        if rssi >= self.MIN_BLE_RSSI:   # if user is near
+                            self.log.debug("near user: '{!r}'".format(rssi))
+                            if rssi > nearest_RSSI:     # if the user is the nearest
+                                nearest_RSSI = rssi
+                                nearest_user = user_id
+                                self.log.debug("NEAREST USER: '{!r}'".format(nearest_user))
             
-            if nearestName != "":
-                self.nfc = nearestName
-                self.isNear = True
-                self.log.debug("proximity {!r}".format(nearestName))
-                #self.omniacls.stopRecvBLE()
+            if nearest_user != "":
+                self.last_near_user = nearest_user
+                self.is_near = True
+                self.log.debug("DETECTED PROXIMITY: user_id='{!r}'".format(nearest_user))
+                #self.omniaClass.stopRecvBLE()
     
-    def getNFC(self):
-        return self.nfc
+    def getLastNearUser(self):
+        return self.last_near_user
 
-    def streamLater(self, username):
-        if not username in self.connectLater:
-            self.connectLater.append(username)
+    # enable user to stream later
+    def streamLater(self, username):    
+        if not username in self.connect_later:
+            self.connect_later.append(username)
     
+    # True if the user can stream later
     def canStreamLater(self, username):
-        if username in self.connectLater:
+        if username in self.connect_later:
             return True
 
         return False
     
+    # stop running iot_function and reset streaming parameters
     def resetStreamingUser(self):
         self.log.debug("resetting streaming user")
-        self.streamLater(self.streamingUser)
-        self.streamingUser = ""
+
+        self.streamLater(self.streaming_user)   # remember user to stream later
+
+        self.streaming_user = ""
         self.stream = False
-        # self.isNear = False
-        # self.omniacls.startRecvNFC(self.NFCCallback)
-        self.omniacls.startRecvBLE(self.BLECallback)
-        self.iot_function = None
+        # self.is_near = False
+        # self.omniaClass.startRecvNFC(self.NFCCallback)
+        self.omniaClass.startRecvBLE(self.BLECallback)  # listen to BLE again
+        self.iot_function = None    # reset iot_function
     
+    # set who is using the device
     def setStreamingUser(self, user):
-        self.streamingUser=user
+        self.streaming_user = user
         self.stream = True
 
     def getStreamingUser(self):
-        return self.streamingUser
+        return self.streaming_user
 
     def getDeviceName(self):
         return self.name
@@ -205,14 +217,17 @@ class Device(threading.Thread):
         return self.type
 
     def run(self):
+        
+        # generate asyncio socket interfaces: 
+        #   reader <-> receive
+        #   writer <-> send 
+        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=self.socket))
+        self.omniaClass.setSendFunction(self.send)  # set omniaClass send function
 
-        self.reader, self.writer = self.loop.run_until_complete(asyncio.open_connection(sock=self.sc))
-
-        self.omniacls.setSendFunction(self.send)
-
+        # create receive task
         recv_task = self.loop.create_task(self.recv())        
 
-        # used for tests
+        '''# used for tests
 
         # s = Sound("eulero", None)
         # s.handleStreaming(self)
@@ -226,31 +241,32 @@ class Device(threading.Thread):
         # f.handleStreaming(self)
         # self.runIOTFunction(f)
 
-        # self.omnia_controller.addUser({"name": "eulero", "uid":"eulero"})
-        # self.omnia_controller.omnia_media_sharing.setAttribute("eulero", "pause", True)
+        # self.omniaController.addUser({"name": "eulero", "uid":"eulero"})
+        # self.omniaController.omnia_media_sharing.setAttribute("eulero", "pause", True)
 
-        # f = self.omnia_controller.getIOTFunction("eulero", self.type)
+        # f = self.omniaController.getIOTFunction("eulero", self.type)
         # f.handleStreaming(self)
-        # self.runIOTFunction(f)
+        # self.runIOTFunction(f)'''
 
-        iot_task = self.loop.create_task(self.__run_iot())
+        # create task that runs the iot_function
+        iot_task = self.loop.create_task(self.__runIOT())
 
-        self.loop.run_until_complete(self.init_config())
+        # wait this task so we can get the latency
+        self.loop.run_until_complete(self.initConfig())
 
-        #self.omniacls.startRecvNFC(self.NFCCallback)
-        self.omniacls.startRecvBLE(self.BLECallback)
+        # self.omniaClass.startRecvNFC(self.NFCCallback)
+        self.omniaClass.startRecvBLE(self.BLECallback)
 
         try:
-            # Run the event loop
-            self.loop.run_forever()
-        except KeyboardInterrupt:
+            self.loop.run_forever()     # run tasks continuously
+        except KeyboardInterrupt:   # stop if Ctrl-C
             self.log.debug("closing {!r} socket".format(self.name))
             pass
 
-        self.loop.close()
+        self.loop.close()   # stop tasks and close loop
 
-    def resumeConnection(self, so):
-        self.sc = so
-        self.omniacls.getPinConfig("src/iot/"+self.name+"/pinout.json")
-        #self.omniacls.resumeImg()
+    def resumeConnection(self, socket):
+        self.socket = socket
+        self.omniaClass.getPinConfig("src/iot/" + self.name + "/pinout.json")
+        # self.omniaClass.resumeImg()
         self.log.debug("resumed")
