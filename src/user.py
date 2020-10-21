@@ -98,20 +98,16 @@ class User(threading.Thread):
         self.omniaClass.sendImg()
         # await asyncio.sleep(3)
 
+        self.prepareApps()
+    
+    def prepareApps(self):
+
         userAppsPath = self.name + "/src/"    # path to user apps
 
         # create list of files in src's user path
-        apps = []
-        if os.path.exists(userAppsPath):
-            for (_, _, filenames) in os.walk(userAppsPath):
-                apps.extend(filenames)
-                break
-    
+        apps = next(os.walk(userAppsPath))[2]
         apps.sort()     # sort in alphabetical order
 
-        self.prepareApps(apps)
-    
-    def prepareApps(self, apps):
         for app in apps:
             app_name = app[:-3]     # remove .py extension
             if app_name[0] != "_":      # do not import apps that start with "_"
