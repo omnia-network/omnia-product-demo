@@ -1,6 +1,5 @@
 from PIL   			            import Image
 import time
-import threading
 import os
 import importlib
 import asyncio
@@ -15,7 +14,7 @@ from src.omniaClass             import OmniaClass
 #from src.iot_funct.display import Display'''
 ### --- ###
 
-class Device(threading.Thread):
+class Device:
 
     DEFAULT_WAIT_TIME = 0.1
     WAIT_TIME_IOT = 0.001
@@ -29,9 +28,16 @@ class Device(threading.Thread):
         self.address = address    # (IPAddress, Port)
         ### --- ###
 
-        ### Thread ###
-        threading.Thread.__init__(self)
-        self.name = device_data["name"]     # rename thread with the name of the device 
+        ### Device data ###
+        '''
+        device_data structure
+        {
+            "name": "device_name",
+            "class": "device_type"
+        }
+        '''        
+        self.device_data = device_data
+        self.name = device_data["name"]     # device name
         self.type = device_data["class"]   # device type
         ### --- ###
 
@@ -51,17 +57,6 @@ class Device(threading.Thread):
 
         ### Omnia Controller ###
         self.omniaController = omniaController
-        ### --- ###
-
-        ### Device data ###
-        '''
-        device_data structure
-        {
-            "name": "device_name",
-            "class": "device_type"
-        }
-        '''        
-        self.device_data = device_data
         ### --- ###
 
         ### Proximity detection ###
@@ -216,7 +211,7 @@ class Device(threading.Thread):
     def getDeviceType(self):
         return self.type
 
-    def run(self):
+    def main(self):
         
         # generate asyncio socket interfaces: 
         #   reader <-> receive

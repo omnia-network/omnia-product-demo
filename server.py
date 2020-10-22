@@ -2,6 +2,7 @@ import socket
 import json
 import logging
 import sys
+import threading
 
 ### Omnia libraries ###
 from src.device 			import Device
@@ -18,14 +19,15 @@ logging.basicConfig(
 log = logging.getLogger('main')
 
 '''
-threadAssign structure
+threads structure
 {
     "username":{    # user_name or device_name
-       "thread": User/Device instance
+       "thread": user/device's thread instance,
+       "instance": User/Device class instance
     }
 }
 '''
-threadAssign = {}   # list of users and devices objects
+threads = {}   # list of users and devices objects
 
 users_path = "users.json"
 devices_path = "devices.json"
@@ -60,7 +62,8 @@ with open(devices_path, "r") as rf:
     devices = json.load(rf)
 
 # server IP address and port
-ADDRESS = socket.gethostbyname( socket.gethostname() )    # IP of this machine
+#ADDRESS = socket.gethostbyname( socket.gethostname() )    # IP of this machine
+ADDRESS = "192.168.1.10"
 PORT = 50500                                # randomly chosen
 
 # create TCP/IP socket for new connections
@@ -103,14 +106,14 @@ while(1):
         user_data = users[client_mac]    # get user data at this mac
         user_name = user_data["name"]
 
-        if user_name in threadAssign and threadAssign[user_name]["thread"].isAlive():     # thread already running for this user
+        if user_name in threads and threads[user_name]["thread"].is_alive():     # thread already running for this user
             log.debug("resuming USER: {!r}".format(user_name))
-            #threadAssign[user_name]["thread"].resumeConnection(client_socket)   # resume connection with new socket
+            #threads[user_name]["thread"].resumeConnection(client_socket)   # resume connection with new socket
   
         else:
-            # if user_name in threadAssign:    # user had already connected but thread died
+            # if user_name in threads:    # user had already connected but thread died
             #     log.debug("dead USER {!r}".format(user_name))
-            #     threadAssign.pop(user_name)
+            #     threads.pop(user_name)
             #     omniaController.removeUser(user_name)
 
             log.debug("connecting USER: {!r}".format(user_name))
@@ -120,32 +123,34 @@ while(1):
             omniaController.addUser(user_data)
 
             # create thread for the new user
-            threadAssign.__setitem__(user_name, {"thread": user})
-            user.start()    #start user's thread
+            th = threading.Thread(target=user.main, name=user_name, daemon=True)
+            threads.__setitem__(user_name, {"thread": th, "instance": user})   # add user's thread and instance to threads
+            th.start()    #start user's thread
 
     elif client_mac in devices: # client is a device
         device_data = devices[client_mac]    # get device data at this mac
         device_name = device_data["name"]
         
-        if device_name in threadAssign and threadAssign[device_name]["thread"].isAlive():   # thread already running for this device
+        if device_name in threads and threads[device_name]["thread"].is_alive():   # thread already running for this device
             log.debug("resuming DEVICE: {!r}".format(device_name))
-            #threadAssign[device_name]["thread"].resumeConnection(client_socket)    # resume connection with new socket
+            #threads[device_name]["thread"].resumeConnection(client_socket)    # resume connection with new socket
             
         else:
-            # if device_name in threadAssign:
+            # if device_name in threads:
             #     log.debug("dead DEVICE {!r}".format(device_name))
-            #     threadAssign.pop(device_name)
+            #     threads.pop(device_name)
             #     omniaController.removeDevice(device_name)
         
             log.debug("connecting DEVICE: {!r}".format(device_name))
 
             # create a Device class instance for this device
-            dev = Device(client_socket, client_address, device_data, omniaController)
-            omniaController.addDevice(dev)
+            device = Device(client_socket, client_address, device_data, omniaController)
+            omniaController.addDevice(device)
 
             # create thread for the new device
-            threadAssign.__setitem__(device_name, {"thread": dev})
-            dev.start()     #start device's thread
+            th = threading.Thread(target=device.main, name=device_name, daemon=True)
+            threads.__setitem__(device_name, {"thread": th, "instance": device})   # add device's thread and instance to threads
+            th.start()    # start device's thread
 
-    log.debug("Clients connected: {!r}".format(len(threadAssign)))
+    log.debug("Clients connected: {!r}".format(len(threads)))
     log.debug("-----")

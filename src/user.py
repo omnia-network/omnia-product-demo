@@ -1,5 +1,4 @@
 from PIL   			            import Image
-import threading
 import os
 import importlib
 import asyncio
@@ -10,7 +9,7 @@ from src.notifyService          import NotifyService
 from src.omniaClass             import OmniaClass
 ### --- ###
 
-class User(threading.Thread):
+class User:
 
     def __init__(self, socket, address, user_data, omniaController=None):
 
@@ -20,9 +19,16 @@ class User(threading.Thread):
         self.address = address          # (IPAddress, Port)
         ### --- ###
 
-        ### Thread ###
-        threading.Thread.__init__(self)
-        self.name = user_data["name"]
+        ### User Data ###
+        '''
+        user_data structure
+        {
+            "name": "user_name",
+            "uid": "user id"    # RFID or BLE
+        }
+        '''
+        self.user_data = user_data
+        self.name = user_data["name"]   # user name
         ### --- ###
 
         ### Logging ###
@@ -41,17 +47,6 @@ class User(threading.Thread):
 
         ### Omnia Controller ###
         self.omniaController = omniaController
-        ### --- ###
-
-        ### User Data ###
-        '''
-        user_data structure
-        {
-            "name": "user_name",
-            "uid": "user id"    # RFID or BLE
-        }
-        '''
-        self.user_data = user_data
         ### --- ###
 
         ### Applications ###
@@ -140,7 +135,7 @@ class User(threading.Thread):
                 if i != -1:
                     self.log.debug("starting app: {!r}".format(self.applications_name[i]))
 
-    def run(self):
+    def main(self):
 
         # generate asyncio socket interfaces: 
         #   reader <-> receive
