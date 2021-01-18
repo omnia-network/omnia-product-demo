@@ -1,3 +1,5 @@
+NEW VERSION: [OmniaManager](https://github.com/omnia-network/OmniaManager)
+
 Omnia Remote OS
 
   ### Requirements
